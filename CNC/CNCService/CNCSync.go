@@ -140,11 +140,11 @@ func (transmitter *Transmitter) SyncBuffers(Connection io.ReadWriter, proto Exch
 	if result == "" {
 		return
 	}
-	comands := strings.Split(result, Commands.V1Commands[Commands.EndOfData])
+	comands := strings.Split(result, proto.Command(EndOfData))
 
 	for _, val := range comands {
 		if strings.HasPrefix(val, proto.Command(EndOfData)) {
-			str, _ := strings.CutPrefix(val, Commands.M_MaxBufferSize)
+			str, _ := strings.CutPrefix(val, proto.Command(MMaxBufferSize))
 			MaxSize, err := strconv.Atoi(str)
 			if err != nil {
 				log.Println(err)
@@ -152,7 +152,7 @@ func (transmitter *Transmitter) SyncBuffers(Connection io.ReadWriter, proto Exch
 			transmitter.SetMaxBufferSize(uint(MaxSize))
 		}
 	}
-	Connection.Write([]byte(Commands.ClearBuffer))
+	Connection.Write([]byte(proto.Command(ClearBuffer)))
 	reader.Read()
 	transmitter.SetBufferSize(transmitter.maxValue)
 }
