@@ -1,0 +1,469 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <title>Printer Manager</title>
+  <script src="https://unpkg.com/react@18/umd/react.development.js" crossorigin></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js" crossorigin></script>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 0;
+      padding: 20px;
+      background-color: blanchedalmond;
+    }
+
+    .header {
+      display: flex;
+    }
+
+    .OpenFormsButton {
+      margin: 10px;
+    }
+
+    .error {
+      color: red;
+      margin: 10px;
+      margin-top: 5px;
+    }
+
+    button {
+      padding: 6px 12px;
+      margin-bottom: 10px;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+
+    }
+
+    th,
+    td {
+      border: 1px solid pink;
+      padding: 8px;
+
+      text-align: center;
+    }
+
+    th {
+      background-color: #3366cc;
+      font-weight: normal;
+      color: black;
+    }
+
+    tr:hover {
+      background-color: aqua;
+    }
+
+
+    .container {
+      border: 1px solid pink;
+      height: 600px;
+      overflow-y: auto;
+    }
+
+    .formCom {
+      margin-top: 20px;
+      padding: 10px;
+      border: 1px solid yellow;
+      display: none;
+      width: 300px;
+    }
+
+
+
+    .formIP {
+      margin-top: 20px;
+      padding-left: 10px;
+      padding-top: 10px;
+      border: 1px solid blue;
+      width: 300px;
+    }
+
+    .connectionTypes {
+      display: flex;
+    }
+
+    /* Buttons */
+    .IpBTN {
+      margin-top: 15px;
+      margin-left: 80px;
+      margin-right: 80px;
+    }
+
+    .ComBTN {
+      margin-top: 15px;
+      margin-left: 100px;
+      margin-right: 100px;
+    }
+  </style>
+</head>
+
+<body>
+  <script src = "index.js"> </script>
+  <div class="header">
+    <button onclick="OpenConnectionForms()" id="OpenFormsButton">Connect new printer</button>
+    <div class="error" id="errorMsg"></div>
+    <div class="information" id="informationMsg"> </div>
+  </div>
+  <div class="connectionTypes">
+    <div class="formCom" id="formCom">
+      <label for="comInput">COM port:</label>
+      <input type="text" id="comInput" placeholder="e.g. COM3">
+      <button class="ComBTN" onclick="ConnectCom()">Connect COM</button>
+    </div>
+
+    <div class="formIP" id="formIP">
+      <label for="AddressInput">IP Address:</label>
+      <input type="text" id="AddressInput" placeholder="e.g. 127.0.0.1">
+      <button class="IpBTN" onclick="ConnectIpAddress()">Connect ip Address</button>
+    </div>
+  </div>
+  <div class="container">
+    <table>
+      <thead>
+        <tr>
+          <th style="width: 5px;">№</th>
+          <th>Name of printer</th>
+          <th>Type of printer</th>
+          <th>Version</th>
+          <th>Connected</th>
+          <th>Connection type</th>
+        </tr>
+      </thead>
+      <tbody>
+        <!-- Empty row area -->
+      </tbody>
+    </table>
+  </div>
+
+  <div class="printerDetails" id="printerDetails" style="border:1px solid green;
+   padding: 10px; 
+   margin-top: 20px;
+   display: none;
+   background-color: aliceblue;">
+
+    <!-- Заголовок сверху -->
+    <div style="display: flex;">
+      <h3 style="margin: 10px;"><strong>Name:</strong> <span id="detailName"></span></h3>
+      <h3 style="margin: 10px;"><strong>Unique key:</strong> <span id="UniqueKey"></span></h3>
+    </div>
+    <div style="display: flex;">
+      <!-- Flex контейнер -->
+      <div style="display: flex; flex-wrap: wrap; gap: 20px;">
+
+        <div class="MainPrinterData" id="MainPrinterData">
+          <p><strong>Type:</strong> <span id="detailType"></span></p>
+          <p><strong>Version:</strong> <span id="detailVersion"></span></p>
+          <p><strong>Working:</strong> <span id="detailWorking"></span></p>
+          <p><strong>Connection:</strong> <span id="detailConnection"></span></p>
+        </div>
+
+        <div class="PrinterGabarites" id="PrinterGabarites">
+          <p><strong>Width:</strong><span id="PrinterWidth"></span></p>
+          <p><strong>Length:</strong><span id="PrinterLength"></span></p>
+          <p><strong>Height:</strong><span id="PrinterHeight"></span></p>
+        </div>
+
+        <div class="PrinterState" id="PrinterState">
+          <p><strong>Nozzle temp:</strong> <span id="NozzleTemp"></span></p>
+          <p><strong>Bed temp:</strong> <span id="BedTemp"></span></p>
+          <p><strong>Is printing:</strong> <span id="IsPrinting"></span></p>
+        </div>
+
+        <div class="PrinterPosotion" id="PrinterPosotion">
+          <p><strong>X:</strong><span id="XPos"></span></p>
+          <p><strong>Y:</strong><span id="YPos"></span></p>
+          <p><strong>Z:</strong><span id="ZPos"></span></p>
+        </div>
+
+        <div style="display: flex; flex-direction: column; justify-content: center;">
+          <input type="file" id="fileInput" style="padding: 20px; margin: 20px;" accept=".gcode">
+          <button onclick="StartPrint()" style="background-color: rgb(141, 185, 149); margin: 20px;"
+            id="StartPrintButton">Start print</button>
+        </div>
+
+      </div>
+      <div class="PrinterMovement" id="PrinterMovement"
+       style="border: 1px solid gray; padding: 10px;">
+        <h3>Move Printer</h3>
+        <label for="stepValue">Step (mm):</label>
+        <input type="number" id="stepValue" value="10" style="width: 60px; margin: 5px;">
+
+        <div style="display: flex; flex-wrap: wrap; gap: 5px; margin-top: 10px;">
+          <button onclick="moveAxis('X', 1)">X+</button>
+          <button onclick="moveAxis('X', -1)">X−</button>
+          <button onclick="moveAxis('Y', 1)">Y+</button>
+          <button onclick="moveAxis('Y', -1)">Y−</button>
+          <button onclick="moveAxis('Z', 1)">Z+</button>
+          <button onclick="moveAxis('Z', -1)">Z−</button>
+          <button onclick="moveAxis('E', 1)">E+</button>
+          <button onclick="moveAxis('E', -1)">E−</button>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+
+
+  <script>
+    const formCom = document.getElementById('formCom');
+    const formAddr = document.getElementById("formIP");
+    const errorMsg = document.getElementById('errorMsg');
+    const informationMsg = document.getElementById('informationMsg');
+    const comInput = document.getElementById('comInput');
+    const AddrInput = document.getElementById('AddressInput');
+    const tableBody = document.querySelector('tbody');
+    const details = document.getElementById("printerDetails")
+    formCom.style.display = 'none';
+    formAddr.style.display = 'none';
+
+    function SendGCode() {
+      const GCodeStr = document.getElementById("GcodeInput").value;
+      const uniqueKey = document.getElementById("UniqueKey");
+      const query = `GCode=${GCodeStr}&uniqueKey=${UniqueKey.textContent}`;
+
+      if (GCodeStr === "" || UniqueKey.textContent === "" || UniqueKey.textContent === "Unknown") {
+        errorMsg.textContent = "Error: unique key or Gcode invalid fields."
+      }
+      console.log("Gcode:" + GCodeStr);
+      console.log("UniqueKey:" + UniqueKey.textContent)
+      fetch(`/api/sendGCode?${query}`, {
+        method: "POST",
+      })
+        .then(res => res.text())
+        .then(msg => {
+          informationMsg.textContent = msg;
+        })
+        .catch(err => {
+          errorMsg.textContent = "Ошибка: " + err.message;
+        });
+    }
+    setInterval(GetDataFromServer, 1000);
+
+    function showPrinterDetails(printer, counter) {
+      if (this === "") {
+
+      }
+      details.style.display = 'block'
+      UpdatePrinterDetails(printer);
+    }
+
+    function StartPrint() {
+      const fileInput = document.getElementById('fileInput');
+      const file = fileInput.files[0];
+
+      if (!file) {
+        errorMsg.textContent = "Файл не выбран!";
+        return;
+      }
+
+      const formData = new FormData();
+      formData.append("PrintFile", file);
+      const UniqueKey = document.getElementById("UniqueKey").textContent;
+      const query = `uniqueKey=${UniqueKey}`;
+
+      fetch(`/api/StartPrint?${query}`, {
+        method: "POST",
+        body: formData
+      })
+        .then(res => res.text())
+        .then(msg => {
+          informationMsg.textContent = msg;
+        })
+        .catch(err => {
+          errorMsg.textContent = "Ошибка: " + err.message;
+        });
+    }
+
+    function GetDataFromServer() {
+      fetch("/api/Printers", {
+        method: "GET",
+        headers: {
+          "Content-Type": "application/json"
+        }
+      })
+        .then(res => {
+          // console.log(res);
+          if (!res.ok) throw new Error("Failed to fetch printer list");
+          return res.json();
+        })
+        .then(printersJson => {
+          console.log(printersJson)
+          // Очищаем таблицу перед повторной отрисовкой
+          tableBody.innerHTML = '';
+          counter = 1;
+
+          printersJson.forEach(printer => {
+            const row = document.createElement('tr');
+
+            const NumberCell = document.createElement('td');
+            NumberCell.textContent = counter;
+
+            const nameCell = document.createElement('td');
+            nameCell.textContent = printer.MainData.printerName || "Unnamed";
+
+            const PrinterTypeCell = document.createElement('td');
+            PrinterTypeCell.textContent = printer.MainData.printerType || "Unknown";
+
+            const VersionCell = document.createElement('td');
+            VersionCell.textContent = printer.MainData.version || "Unknown";
+
+            const statusCell = document.createElement('td');
+            statusCell.textContent = printer.MainData.isWorking === true ? "Yes" : "No" || "Unknown";
+
+            const ConnectionCell = document.createElement('td');
+            ConnectionCell.textContent = printer.MainData.typeOfConnection || "Unknown";
+
+            row.addEventListener('click', () => showPrinterDetails(printer, counter));
+            UpdatePrinterDetails(printer);
+            row.appendChild(NumberCell);
+            row.appendChild(nameCell);
+            row.appendChild(PrinterTypeCell);
+            row.appendChild(VersionCell);
+            row.appendChild(statusCell);
+            row.appendChild(ConnectionCell);
+            tableBody.appendChild(row);
+            counter++;
+          });
+        })
+        .catch(err => {
+          details.style.display = 'none'
+          tableBody.innerHTML = '';
+          errorMsg.textContent = "Ошибка загрузки принтеров: " + err.message;
+        });
+    }
+
+    function UpdatePrinterDetails(printer) {
+      if (details.offsetParent !== null) { //element has visible
+        document.getElementById("detailName").textContent = printer.MainData.printerName || "Unnamed";
+        document.getElementById("UniqueKey").textContent = printer.MainData.uniqueKey || "Unknown";
+        document.getElementById("detailType").textContent = printer.MainData.printerType || "Unknown";
+        document.getElementById("detailVersion").textContent = printer.MainData.version || "Unknown";
+        document.getElementById("detailWorking").textContent = printer.MainData.isWorking === true ? "Yes" : "No";
+        document.getElementById("detailConnection").textContent = printer.MainData.typeOfConnection || "Unknown";
+        document.getElementById("PrinterWidth").textContent = printer.width || "Unknown";
+        document.getElementById("PrinterLength").textContent = printer.length || "Unknown";
+        document.getElementById("PrinterHeight").textContent = printer.height || "Unknown";
+        document.getElementById("NozzleTemp").textContent = printer.nowTempNozzle || 0;
+        document.getElementById("BedTemp").textContent = printer.nowTempBed || 0;
+        document.getElementById("IsPrinting").textContent = printer.isPrinting === true ? "Yes" : "No" || "Unknown";
+        document.getElementById("XPos").textContent = printer.myXposition || 0;
+        document.getElementById("YPos").textContent = printer.myYposition || 0;
+        document.getElementById("ZPos").textContent = printer.myZposition || 0;
+      }
+    }
+
+    function OpenConnectionForms() {
+      formCom.style.display = formCom.style.display === 'none' ? 'block' : 'none';
+      formAddr.style.display = formAddr.style.display === 'none' ? 'block' : 'none';
+      errorMsg.textContent = '';
+    }
+
+    function ConnectIpAddress() {
+      const addrValue = AddrInput.value.trim();
+      if (!addrValue) {
+        errorMsg.textContent = 'IP address cannot be empty!';
+        return;
+      }
+
+      if (!/^(25[0-5]|2[0-4]\d|1\d{2}|[1-9]?\d)(\.(25[0-5]|2[0-4]\d|1\d{2}|[1-9]?\d)){3}$/i.test(addrValue)) {
+        errorMsg.textContent = 'Invalid address format (e.g. 127.0.0.1)';
+        return;
+      }
+
+      fetch("/connect", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          TypeOfConnection: "IP",
+          ConnectionData: addrValue
+        })
+      })
+        .then(res => {
+          if (!res.ok) return res.text().then(text => { throw new Error(text); });
+          return res.text();
+        })
+        .then(text => {
+          alert("Успешно подключено!");
+          console.log(text);
+        })
+        .catch(err => {
+          errorMsg.textContent = "Ошибка: " + err.message;
+        });
+    }
+
+    function ConnectCom() {
+      const comValue = comInput.value.trim();
+      if (!comValue) {
+        errorMsg.textContent = 'COM port cannot be empty!';
+        return;
+      }
+
+      // if (!/^COM\d+$/i.test(comValue)) {
+      //   errorMsg.textContent = 'Invalid COM port format (e.g. COM3)';
+      //   return;
+      // }
+
+      errorMsg.textContent = '';
+  fetch("/connect", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+            TypeOfConnection: "COM",
+            ConnectionData: comValue
+        })
+    })
+        .then(res => {
+            if (!res.ok) return res.text().then(text => { throw new Error(text); });
+            return res.text();
+        })
+        .then(text => {
+            if(Text === "ok"){
+                 alert("Успешно подключено!");
+            }else{
+                alert("Error" + text); 
+                console.log(text);
+            }
+        })
+        .catch(err => {
+            alert("Error: " + err.message)
+        });
+    }
+
+
+
+    //
+    function moveAxis(axis, direction) {
+      const step = parseFloat(document.getElementById("stepValue").value);
+      if (isNaN(step) || step <= 0) {
+        errorMsg.textContent = "Step must be a positive number.";
+        return;
+      }
+
+      const uniqueKey = document.getElementById("UniqueKey").textContent;
+      if (!uniqueKey || uniqueKey === "Unknown") {
+        errorMsg.textContent = "Invalid or missing UniqueKey.";
+        return;
+      }
+
+      const value = direction * step;
+      const gcode = `G91\nG1 ${axis}${value.toFixed(2)} F3000\nG90`; // G91 = relative, G90 = absolute
+      const query = `GCode=${encodeURIComponent(gcode)}&uniqueKey=${encodeURIComponent(uniqueKey)}`;
+
+      fetch(`/api/sendGCode?${query}`, {
+        method: "POST",
+      })
+        .then(res => res.text())
+        .then(msg => {
+          informationMsg.textContent = msg;
+        })
+        .catch(err => {
+          errorMsg.textContent = "Ошибка при перемещении: " + err.message;
+        });
+    }
+    //
+  </script>

@@ -1,0 +1,8 @@
+.PrinterGabarites {
+  background-color: #fff;
+  border: 1px solid #ddd;
+  border-radius: 10px;
+  padding: 15px;
+  min-width: 100px;
+  flex: 1;
+}

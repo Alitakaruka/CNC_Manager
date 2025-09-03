@@ -1,0 +1,12 @@
+.ConnectBTN{
+    background-color: rgb(139, 218, 159);
+    display: flex;
+    border: 1px;
+    display: flex;
+   justify-content: center;
+  align-items: center;
+}
+.BlockBTN{
+    justify-content: center; /* по горизонтали */
+    align-items: center;     /* по вертикали */
+}

@@ -1,0 +1,48 @@
+.printers-container {
+  margin-top: 30px;
+  padding: 1rem;
+  background-color: #ffffffcc;
+  border-radius: 12px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08);
+  backdrop-filter: blur(6px);
+  font-family: 'Segoe UI', sans-serif;
+  overflow-x: auto;
+}
+
+.printers-container table {
+  width: 100%;
+  border-collapse: collapse;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.printers-container th,
+.printers-container td {
+  padding: 0.75rem 1rem;
+  text-align: left;
+  border-bottom: 1px solid #eaeaea;
+  border-right: 1px solid violet;
+}
+
+.printers-container th {
+  background-color: #f0f0f5;
+  font-weight: bold;
+  color: #333;
+}
+
+.printers-container tbody tr:hover {
+  background-color: #f9f9ff;
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+}
+
+.printers-container td {
+  color: #444;
+}
+
+.printers-container p {
+  color: red;
+  font-weight: 600;
+  text-align: center;
+  margin-bottom: 1rem;
+}
