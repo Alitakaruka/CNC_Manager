@@ -24,22 +24,24 @@ type AnyCNC interface {
 	GetDTO() CNC_DTO
 	SetDTO(DTO CNC_DTO)
 	Reconnect() (bool, error)
-	CNCStart()
 	GetLogs() []string
 	SendMessage(message []byte)
 	InitDevice() error
+	CNCStart()
+	ExecuteTask() error
 }
 
 type CNCCore struct {
-	DTO            *CNC_DTO
-	Connection     Connectors.CNCConnector
-	Transmitter    *CNCService.Transmitter
-	ReceiveBuffer  []byte `json:"-"`
-	Connected      bool   `json:"Connected"`
-	Mutex          sync.Mutex
-	ComandsBuilder CNCService.ExchangeProtocol
-	WatchDog       *time.Timer
-	Logs           []string
+	DTO           *CNC_DTO
+	Connection    Connectors.CNCConnector
+	Transmitter   *CNCService.Transmitter
+	ReceiveBuffer []byte `json:"-"`
+
+	Mutex    sync.Mutex
+	Protocol CNCService.ExchangeProtocol
+	WatchDog *time.Timer
+	Logs     []string
+	WorkFile []string `json:"-"`
 }
 
 type CNC_DTO struct {
@@ -47,15 +49,21 @@ type CNC_DTO struct {
 	MACHINE_TYPE              string `json:"MACHINE_TYPE"`
 	FIRMWARE_VERSION          string `json:"FIRMWARE_VERSION"`
 	IsWorking                 bool   `json:"isWorking"`
+	Connected                 bool   `json:"Connected"`
 	EXCHANGE_PROTOCOL_VERSION int    `json:"EXCHANGE_PROTOCOL_VERSION"`
 	ConnectionData            string `json:"-"`
+	UniqueKey                 string `json "UniqueKey"`
+}
+
+func (cnc *CNCCore) ExecuteTask() error {
+	return errors.New("this CNC can not be executing tasks")
+	//stub
 }
 
 func (cnc *CNCCore) CNCStart() {
 	cnc.ReceiveBuffer = make([]byte, 512)
 	cnc.Transmitter = CNCService.NewTransmitter()
-	cnc.DTO.IsWorking = true
-	cnc.Transmitter.SyncBuffers(cnc.Connection, cnc.ComandsBuilder)
+	cnc.Transmitter.SyncBuffers(cnc.Connection, cnc.Protocol)
 	go cnc.StartWatchcDog()
 	go cnc.ReadConnectionAsync()
 }
@@ -79,11 +87,13 @@ func (cnc *CNCCore) InitDevice() error {
 	if res == "" {
 		return errors.New("the device did not respond to the request")
 	}
+
 	err := (json.Unmarshal([]byte(res), &cnc.DTO))
 	if err != nil {
 		return err
 	}
-	cnc.ComandsBuilder.Protocol = cnc.DTO.EXCHANGE_PROTOCOL_VERSION
+	cnc.DTO.Connected = true
+	cnc.Protocol.Protocol = cnc.DTO.EXCHANGE_PROTOCOL_VERSION
 	return nil
 }
 
@@ -202,4 +212,18 @@ func Connect(typeOfConnection string, connectionData string) (AnyCNC, error) {
 	} else {
 		return &Core, nil
 	}
+}
+
+func (cnc *CNCCore) LoadFileForWork(file []byte) error {
+	clear(cnc.WorkFile)
+	DataFile := string(file)
+	if cnc.Connection == nil {
+		return errors.New("device is not connected")
+	}
+
+	if cnc.DTO.IsWorking {
+		return errors.New("printer is already print")
+	}
+	cnc.WorkFile = strings.Split(DataFile, "\n")
+	return nil
 }

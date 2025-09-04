@@ -3,7 +3,6 @@ package Service
 import (
 	"PrinterManager/CNC"
 	"PrinterManager/CNC/CNCService/Connectors"
-	ThreeDPrinter "PrinterManager/CNC/ThreeDPrinters"
 	"crypto/rand"
 	"encoding/hex"
 	"errors"
@@ -17,13 +16,13 @@ type ConnectionData struct {
 	ConnectionData   string
 }
 
-type PrinterManager struct {
+type CNCManagerr struct {
 	connectors   []Connectors.CNCConnector
 	CNC_Machines []CNC.AnyCNC
 	Printers     []ThreeDPrinter.AnyPrinter
 }
 
-func (PM *PrinterManager) Connect(conData ConnectionData) error {
+func (PM *CNCManagerr) Connect(conData ConnectionData) error {
 	if index, find := PM.findByConnectionData(conData); find {
 		if PM.IsConnected(index) {
 			return errors.New("CNC is already connected")
@@ -46,12 +45,12 @@ func (PM *PrinterManager) Connect(conData ConnectionData) error {
 	}
 }
 
-func (PM *PrinterManager) IsConnected(index int) bool {
+func (PM *CNCManagerr) IsConnected(index int) bool {
 	DTO := PM.Printers[index].GetDTO()
 	return DTO.IsWorking
 }
 
-func (PM *PrinterManager) findByConnectionData(ConData ConnectionData) (int, bool) {
+func (PM *CNCManagerr) findByConnectionData(ConData ConnectionData) (int, bool) {
 	for ind, printer := range PM.Printers {
 		DTO := printer.GetDTO()
 		if (DTO.ConnectionData == ConData.ConnectionData) &&
@@ -62,7 +61,7 @@ func (PM *PrinterManager) findByConnectionData(ConData ConnectionData) (int, boo
 	return 0, false
 }
 
-func (PM *PrinterManager) findByKey(key string) (int, bool) {
+func (PM *CNCManagerr) findByKey(key string) (int, bool) {
 	for ind, printer := range PM.Printers {
 		DTO := printer.GetDTO()
 		if DTO.UniqueKey == key {
@@ -72,7 +71,7 @@ func (PM *PrinterManager) findByKey(key string) (int, bool) {
 	return 0, false
 }
 
-func (PM *PrinterManager) StartPrint(key string, byteFile []byte) error {
+func (PM *CNCManagerr) StartPrint(key string, byteFile []byte) error {
 	if index, find := PM.findByKey(key); find {
 		ex := PM.Printers[index].StartPrint(byteFile)
 		return ex
@@ -80,7 +79,7 @@ func (PM *PrinterManager) StartPrint(key string, byteFile []byte) error {
 	return errors.New("printer not found")
 }
 
-func (PM *PrinterManager) reconect(index int) error {
+func (PM *CNCManagerr) reconect(index int) error {
 	DTO := PM.Printers[index].GetDTO()
 	newPrinter, ex := ThreeDPrinter.ConnectPrinter(DTO.TypeOfConnection, DTO.ConnectionData)
 	if ex != nil {
@@ -92,7 +91,7 @@ func (PM *PrinterManager) reconect(index int) error {
 	return nil
 }
 
-func (PM *PrinterManager) GetJson() string {
+func (PM *CNCManagerr) GetJson() string {
 	result := "["
 
 	for _, printer := range PM.Printers {
@@ -103,7 +102,7 @@ func (PM *PrinterManager) GetJson() string {
 	return result
 }
 
-func (PM *PrinterManager) LoggingAsync() {
+func (PM *CNCManagerr) LoggingAsync() {
 	for {
 		for _, printer := range PM.Printers {
 			Logs := printer.Get_Logs()
@@ -115,7 +114,7 @@ func (PM *PrinterManager) LoggingAsync() {
 	}
 }
 
-func (PM *PrinterManager) SendGCode(GCode, Key string) error {
+func (PM *CNCManagerr) SendGCode(GCode, Key string) error {
 	Commands := strings.Split(GCode, "\n")
 	for _, val := range Commands {
 		log.Printf("Gcode sended:%v", val)
@@ -127,11 +126,11 @@ func (PM *PrinterManager) SendGCode(GCode, Key string) error {
 	return errors.New("printer not found")
 }
 
-func (PM *PrinterManager) SaveSettings() {
+func (PM *CNCManagerr) SaveSettings() {
 
 }
 
-func (PM *PrinterManager) GenerateUniqueKey() string {
+func (PM *CNCManagerr) GenerateUniqueKey() string {
 	for {
 		key := GenerateRandomKey()
 		if PM.isUnique(key) {
@@ -140,7 +139,7 @@ func (PM *PrinterManager) GenerateUniqueKey() string {
 	}
 }
 
-func (PM *PrinterManager) isUnique(key string) bool {
+func (PM *CNCManagerr) isUnique(key string) bool {
 	for _, printer := range PM.Printers {
 		DTO := printer.GetDTO()
 		if DTO.UniqueKey == key {
@@ -158,7 +157,7 @@ func GenerateRandomKey() string {
 	return hex.EncodeToString(bytes)
 }
 
-func (PM *PrinterManager) SetColor(R, G, B byte, key string) error {
+func (PM *CNCManagerr) SetColor(R, G, B byte, key string) error {
 	if index, ok := PM.findByKey(key); ok {
 		go PM.Printers[index].SetColorLight(R, G, B)
 		return nil

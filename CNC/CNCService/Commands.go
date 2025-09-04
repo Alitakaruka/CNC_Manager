@@ -64,7 +64,6 @@ const (
 const (
 	ItsTemperatureN    = 16 // "N_"
 	ItsTemperatureB    = 17 // "B_"
-	CheckPrinter       = 18 // "*_"
 	BufferACK          = 19 // "ok"
 	ImPrinting         = 20 // "P_"
 	MPositionX         = 21 // "X_"
@@ -157,7 +156,6 @@ var Protocols = []map[int]string{
 
 		ItsTemperatureN:    "N_",
 		ItsTemperatureB:    "B_",
-		CheckPrinter:       "*_",
 		BufferACK:          "ok",
 		ImPrinting:         "P_",
 		MPositionX:         "X_",
