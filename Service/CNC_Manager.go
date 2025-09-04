@@ -27,13 +27,13 @@ func (CNC_M *CNCManagerr) Connect(conData ConnectionData) error {
 			return CNC_M.reconect(index)
 		}
 	} else {
-		newPrinter, ex := CNC.Connect(conData.TypeOfConnection, conData.ConnectionData)
+		newCNC, ex := CNC.Connect(conData.TypeOfConnection, conData.ConnectionData)
 		if ex != nil {
 			return ex
 		}
-		CNC_M.CNC_Machines = append(CNC_M.CNC_Machines, newPrinter)
-		newPrinter.InitDevice()
-		newPrinter.CNCStart()
+		CNC_M.CNC_Machines = append(CNC_M.CNC_Machines, newCNC)
+		newCNC.InitDevice()
+		newCNC.CNCStart()
 		return nil
 	}
 }
@@ -44,8 +44,8 @@ func (CNC_M *CNCManagerr) IsConnected(index int) bool {
 }
 
 func (CNC_M *CNCManagerr) findByConnectionData(ConData ConnectionData) (int, bool) {
-	for ind, printer := range CNC_M.CNC_Machines {
-		DTO := printer.GetDTO()
+	for ind, CNC := range CNC_M.CNC_Machines {
+		DTO := CNC.GetDTO()
 		if DTO.ConnectionData == ConData.ConnectionData {
 			return ind, true
 		}
@@ -54,8 +54,8 @@ func (CNC_M *CNCManagerr) findByConnectionData(ConData ConnectionData) (int, boo
 }
 
 func (CNC_M *CNCManagerr) findByKey(key string) (int, bool) {
-	for ind, printer := range CNC_M.CNC_Machines {
-		DTO := printer.GetDTO()
+	for ind, CNC := range CNC_M.CNC_Machines {
+		DTO := CNC.GetDTO()
 		if DTO.UniqueKey == key {
 			return ind, true
 		}
@@ -86,8 +86,8 @@ func (CNC_M *CNCManagerr) GetJson() string {
 	return ""
 	// result := "["
 
-	// for _, printer := range CNC_M.CNC_Machines {
-	// 	result += (printer.GetLogs() + ",")
+	// for _, CNC := range CNC_M.CNC_Machines {
+	// 	result += (CNC.GetLogs() + ",")
 	// }
 	// result, _ = strings.CutSuffix(result, ",")
 	// result += "]"
@@ -96,8 +96,8 @@ func (CNC_M *CNCManagerr) GetJson() string {
 
 func (CNC_M *CNCManagerr) LoggingAsync() {
 	for {
-		for _, printer := range CNC_M.CNC_Machines {
-			Logs := printer.GetLogs()
+		for _, CNC := range CNC_M.CNC_Machines {
+			Logs := CNC.GetLogs()
 			for _, iLog := range Logs {
 				log.Println(iLog)
 			}
@@ -131,8 +131,8 @@ func (CNC_M *CNCManagerr) GenerateUniqueKey() string {
 }
 
 func (CNC_M *CNCManagerr) isUnique(key string) bool {
-	for _, printer := range CNC_M.CNC_Machines {
-		DTO := printer.GetDTO()
+	for _, CNC := range CNC_M.CNC_Machines {
+		DTO := CNC.GetDTO()
 		if DTO.UniqueKey == key {
 			return false
 		}
