@@ -10,7 +10,6 @@ import (
 	"log"
 	"net/http"
 	"os"
-	"strconv"
 	"time"
 
 	"github.com/gorilla/websocket"
@@ -21,7 +20,7 @@ import (
 var ServerFile embed.FS
 
 type PrinterServer struct {
-	Manager     Service.PrinterManager
+	Manager     Service.CNCManagerr
 	mux         *http.ServeMux
 	port        string
 	Adrr        string
@@ -56,11 +55,11 @@ func (PS *PrinterServer) InitServer() {
 	PS.mux.HandleFunc("/connect", PS.ConnectPrinter)
 	PS.mux.HandleFunc("/ws", PS.HandleWS)
 	PS.mux.HandleFunc("/api/Printers", PS.GetPrintersInformation)
-	PS.mux.HandleFunc("/api/StartPrint", PS.StartPrint)
+	PS.mux.HandleFunc("/api/ExecuteTask", PS.ExecuteTask)
 	PS.mux.HandleFunc("/api/SaveSettings", PS.saveSettings)
 	PS.mux.HandleFunc("/api/GetSettings", PS.getSettings)
 	PS.mux.HandleFunc("/api/sendGCode", PS.SendGCode)
-	PS.mux.HandleFunc("/api/SetColor", PS.SetColor)
+	// PS.mux.HandleFunc("/api/SetColor", PS.SetColor)
 }
 
 func CatchPanic(context string) {
@@ -119,38 +118,38 @@ func (PS *PrinterServer) SendGCode(w http.ResponseWriter, r *http.Request) {
 	w.Write([]byte("ok"))
 }
 
-func (PS *PrinterServer) SetColor(w http.ResponseWriter, r *http.Request) {
-	Red, err := strconv.Atoi(r.URL.Query().Get("R"))
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
-	}
-	Green, err := strconv.Atoi(r.URL.Query().Get("G"))
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
-	}
-	Blue, err := strconv.Atoi(r.URL.Query().Get("B"))
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
-	}
-	uniqueKey := r.URL.Query().Get("uniqueKey")
+// func (PS *PrinterServer) SetColor(w http.ResponseWriter, r *http.Request) {
+// 	Red, err := strconv.Atoi(r.URL.Query().Get("R"))
+// 	if err != nil {
+// 		http.Error(w, err.Error(), http.StatusBadRequest)
+// 		return
+// 	}
+// 	Green, err := strconv.Atoi(r.URL.Query().Get("G"))
+// 	if err != nil {
+// 		http.Error(w, err.Error(), http.StatusBadRequest)
+// 		return
+// 	}
+// 	Blue, err := strconv.Atoi(r.URL.Query().Get("B"))
+// 	if err != nil {
+// 		http.Error(w, err.Error(), http.StatusBadRequest)
+// 		return
+// 	}
+// 	uniqueKey := r.URL.Query().Get("uniqueKey")
 
-	if uniqueKey == "" {
-		http.Error(w, "Unique key can not be empty", http.StatusBadRequest)
-		return
-	}
-	err = PS.Manager.SetColor(byte(Red), byte(Green), byte(Blue), uniqueKey)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
-	}
-	w.Write([]byte("ok"))
+// 	if uniqueKey == "" {
+// 		http.Error(w, "Unique key can not be empty", http.StatusBadRequest)
+// 		return
+// 	}
+// 	err = PS.Manager.SetColor(byte(Red), byte(Green), byte(Blue), uniqueKey)
+// 	if err != nil {
+// 		http.Error(w, err.Error(), http.StatusBadRequest)
+// 		return
+// 	}
+// 	w.Write([]byte("ok"))
 
-}
+// }
 
-func (PS *PrinterServer) StartPrint(w http.ResponseWriter, r *http.Request) {
+func (PS *PrinterServer) ExecuteTask(w http.ResponseWriter, r *http.Request) {
 	r.ParseForm()
 	file, _, ex := r.FormFile("PrintFile")
 	if ex != nil {
@@ -163,7 +162,7 @@ func (PS *PrinterServer) StartPrint(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, ex.Error(), http.StatusBadRequest)
 	}
 	Key := r.URL.Query().Get("uniqueKey")
-	PS.Manager.StartPrint(Key, fileBytes)
+	PS.Manager.ExecuteTask(Key, fileBytes)
 	w.Write([]byte("Start printing!"))
 }
 

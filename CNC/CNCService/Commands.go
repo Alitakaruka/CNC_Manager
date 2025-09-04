@@ -74,7 +74,6 @@ const (
 	MWidth             = 26 // "W_"
 	MLength            = 27 // "L_"
 	MHeight            = 28 // "H_"
-	MVersion           = 29 // "V_"
 	MName              = 30 // "n_"
 	MType              = 31 // "T_"
 )
@@ -166,7 +165,6 @@ var Protocols = []map[int]string{
 		MWidth:             "W_",
 		MLength:            "L_",
 		MHeight:            "H_",
-		MVersion:           "V_",
 		MName:              "n_",
 		MType:              "T_",
 

@@ -1,9 +1,8 @@
 package Service
 
 import (
-	ThreeDPrinter "PrinterManager/CNC/ThreeDPrinters"
+	"PrinterManager/CNC"
 	"database/sql"
-	"errors"
 	"log"
 )
 
@@ -40,8 +39,8 @@ func (PR *PrinterRepository) InitRepository(sqlPath string) error {
 	return nil
 }
 
-func (PR *PrinterRepository) AddPrinter(Printer ThreeDPrinter.AnyPrinter) error {
-	printerData := Printer.GetDTO()
+func (PR *PrinterRepository) AddPrinter(CNC CNC.AnyCNC) error {
+	printerData := CNC.GetDTO()
 	query := `INSERT INTO Printers (
 		PrinterName,
 		UserNamePrinter,
@@ -53,11 +52,10 @@ func (PR *PrinterRepository) AddPrinter(Printer ThreeDPrinter.AnyPrinter) error 
 	if ex != nil {
 		return ex
 	}
-	_, ex = statement.Exec(printerData.PrinterName,
-		printerData.UserPrinterName,
-		printerData.TypeOfConnection,
+	_, ex = statement.Exec(printerData.TARGET_MACHINE_NAME,
+		printerData.FIRMWARE_VERSION,
 		printerData.ConnectionData,
-		printerData.Version)
+		printerData.FIRMWARE_VERSION)
 	if ex != nil {
 		return ex
 	}
@@ -65,8 +63,8 @@ func (PR *PrinterRepository) AddPrinter(Printer ThreeDPrinter.AnyPrinter) error 
 }
 
 // TODO
-func (PR *PrinterRepository) DeletePrinter(Printer ThreeDPrinter.AnyPrinter) error {
-	printerData := Printer.GetDTO()
+func (PR *PrinterRepository) DeletePrinter(CNC CNC.AnyCNC) error {
+	printerData := CNC.GetDTO()
 	query := `DELETE INTO Printers (
 		PrinterName,
 		UserNamePrinter,
@@ -78,50 +76,48 @@ func (PR *PrinterRepository) DeletePrinter(Printer ThreeDPrinter.AnyPrinter) err
 	if ex != nil {
 		return ex
 	}
-	_, ex = statement.Exec(printerData.PrinterName,
-		printerData.UserPrinterName,
-		printerData.TypeOfConnection,
+	_, ex = statement.Exec(printerData.TARGET_MACHINE_NAME,
 		printerData.ConnectionData,
-		printerData.Version)
+		printerData.FIRMWARE_VERSION)
 	if ex != nil {
 		return ex
 	}
 	return nil
 }
 
-func (PR *PrinterRepository) GetAllPrinters() ([]ThreeDPrinter.AnyPrinter, error) {
-	if PR.Db == nil {
-		return nil, errors.New("data base is not connected")
-	}
-	rows, ex := PR.Db.Query(`SELECT 
-	ID, 
-	PrinterName,
-	UserNamePrinter,
-	TypeOfConnection,
-	ConnectionData,
-	Version 
-	FROM printers`)
-	if ex != nil {
-		return nil, ex
-	}
-	var result []ThreeDPrinter.AnyPrinter
-	for rows.Next() {
-		var ID int
-		var PrinterName, UserNamePrinter, TypeOfPrinter, TypeOfConnection, ConnectionData, Version string
-		ex := rows.Scan(&ID, &PrinterName, &UserNamePrinter, &TypeOfPrinter, &TypeOfConnection, &ConnectionData, &Version)
+// func (PR *PrinterRepository) GetAllPrinters() ([]CNC.AnyCNC, error) {
+// 	if PR.Db == nil {
+// 		return nil, errors.New("data base is not connected")
+// 	}
+// 	rows, ex := PR.Db.Query(`SELECT
+// 	ID,
+// 	PrinterName,
+// 	UserNamePrinter,
+// 	TypeOfConnection,
+// 	ConnectionData,
+// 	Version
+// 	FROM printers`)
+// 	if ex != nil {
+// 		return nil, ex
+// 	}
+// 	var result []CNC.AnyCNC
+// 	for rows.Next() {
+// 		var ID int
+// 		var PrinterName, UserNamePrinter, TypeOfPrinter, TypeOfConnection, ConnectionData, Version string
+// 		ex := rows.Scan(&ID, &PrinterName, &UserNamePrinter, &TypeOfPrinter, &TypeOfConnection, &ConnectionData, &Version)
 
-		MainData := ThreeDPrinter.PrinterDTO{PrinterName: PrinterName,
-			UserPrinterName:  UserNamePrinter,
-			PrinterType:      TypeOfPrinter,
-			Version:          Version,
-			TypeOfConnection: TypeOfConnection, ConnectionData: ConnectionData}
-		if ex != nil {
-			return nil, ex
-		}
-		if Constr, ok := ThreeDPrinter.RegisteredPrinters[MainData.PrinterName]; ok {
-			Printer := Constr()
-			result = append(result, Printer)
-		}
-	}
-	return result, nil
-}
+// 		MainData := ThreeDPrinter.PrinterDTO{PrinterName: PrinterName,
+// 			UserPrinterName:  UserNamePrinter,
+// 			PrinterType:      TypeOfPrinter,
+// 			Version:          Version,
+// 			TypeOfConnection: TypeOfConnection, ConnectionData: ConnectionData}
+// 		if ex != nil {
+// 			return nil, ex
+// 		}
+// 		if Constr, ok := ThreeDPrinter.RegisteredPrinters[MainData.PrinterName]; ok {
+// 			Printer := Constr()
+// 			result = append(result, Printer)
+// 		}
+// 	}
+// 	return result, nil
+// }

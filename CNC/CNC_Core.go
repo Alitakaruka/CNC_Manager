@@ -28,7 +28,7 @@ type AnyCNC interface {
 	SendMessage(message []byte)
 	InitDevice() error
 	CNCStart()
-	ExecuteTask() error
+	ExecuteTask(file []byte) error
 }
 
 type CNCCore struct {
@@ -55,7 +55,7 @@ type CNC_DTO struct {
 	UniqueKey                 string `json "UniqueKey"`
 }
 
-func (cnc *CNCCore) ExecuteTask() error {
+func (cnc *CNCCore) ExecuteTask(file []byte) error {
 	return errors.New("this CNC can not be executing tasks")
 	//stub
 }
