@@ -1,8 +1,8 @@
 package AtmegaPrinter
 
 import (
-	"PrinterManager/CNC/CNCService"
-	FDMPrinter "PrinterManager/CNC/ThreeDPrinters/TypeOfPrinters/FMD"
+	"CNCManager/CNC/CNCService"
+	FDMPrinter "CNCManager/CNC/ThreeDPrinters/TypeOfPrinters/FMD"
 )
 
 type AtmegaPrinter struct {

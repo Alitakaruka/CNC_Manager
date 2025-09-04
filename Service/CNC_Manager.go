@@ -1,7 +1,7 @@
 package Service
 
 import (
-	"PrinterManager/CNC"
+	"CNCManager/CNC"
 	"crypto/rand"
 	"encoding/hex"
 	"errors"

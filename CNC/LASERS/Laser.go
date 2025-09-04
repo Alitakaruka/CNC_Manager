@@ -1,6 +1,6 @@
 package laser
 
-import "PrinterManager/CNC"
+import "CNCManager/CNC"
 
 type Laser struct {
 	CNC.CNCCore

@@ -10,9 +10,8 @@ import (
 
 type IPConnector struct {
 	io.ReadWriteCloser
-	IsConnect bool
-	Adress    string
-	Port      string
+	Adress string
+	Port   string
 }
 
 func NewIpConnector(Adress, port string) *IPConnector {

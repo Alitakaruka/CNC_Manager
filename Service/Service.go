@@ -1,7 +1,7 @@
 package Service
 
 import (
-	AtmegaPrinter "PrinterManager/CNC/ThreeDPrinters/TypeOfPrinters/FMD/Printers"
+	AtmegaPrinter "CNCManager/CNC/ThreeDPrinters/TypeOfPrinters/FMD/Printers"
 	"errors"
 	"log"
 	"os"

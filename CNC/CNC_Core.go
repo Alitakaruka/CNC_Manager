@@ -1,8 +1,8 @@
 package CNC
 
 import (
-	"PrinterManager/CNC/CNCService"
-	"PrinterManager/CNC/CNCService/Connectors"
+	"CNCManager/CNC/CNCService"
+	"CNCManager/CNC/CNCService/Connectors"
 	"bufio"
 	"encoding/json"
 	"errors"

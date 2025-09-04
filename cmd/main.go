@@ -1,7 +1,7 @@
 package main
 
 import (
-	TDServer "PrinterManager/WEB/Server"
+	TDServer "CNCManager/WEB/Server"
 )
 
 func main() {

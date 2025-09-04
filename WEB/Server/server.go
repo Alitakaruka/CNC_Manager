@@ -1,7 +1,7 @@
 package Server
 
 import (
-	Service "PrinterManager/Service"
+	Service "CNCManager/Service"
 	"embed"
 	"encoding/json"
 	"errors"
@@ -34,7 +34,7 @@ func (PS *PrinterServer) InitServer() {
 	if config == nil {
 		port = "8080"
 		addr = "0.0.0.0"
-		sqlPath = "PrinterManagerDB.db"
+		sqlPath = "CNCManagerDB.db"
 		logerPath = "Logs.log"
 	} else {
 		port = config.Server.Port

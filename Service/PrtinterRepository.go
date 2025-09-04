@@ -1,7 +1,7 @@
 package Service
 
 import (
-	"PrinterManager/CNC"
+	"CNCManager/CNC"
 	"database/sql"
 	"log"
 )

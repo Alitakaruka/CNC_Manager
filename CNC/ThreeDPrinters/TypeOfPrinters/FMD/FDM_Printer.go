@@ -1,9 +1,9 @@
 package FDM_Printer
 
 import (
-	"PrinterManager/CNC"
-	"PrinterManager/CNC/CNCService"
-	PrinterService "PrinterManager/CNC/CNCService"
+	"CNCManager/CNC"
+	"CNCManager/CNC/CNCService"
+	PrinterService "CNCManager/CNC/CNCService"
 	"log"
 	"strings"
 	"time"

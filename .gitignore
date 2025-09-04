@@ -18,7 +18,7 @@ data/Logs.log
 data/*.db
 
 # Binaries/artifacts
-PrinterManager64
+CNCManager64
 
 # Go
 bin/
