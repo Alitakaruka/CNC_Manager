@@ -1,8 +1,6 @@
 package CNCService
 
-import "strings"
-
-const Identification = "GET_FIRMWARE_DATA;"
+const Identification = "GET_FIRMWARE_DATA"
 
 // MACHINE TYPES
 const (
@@ -37,10 +35,6 @@ var MachinesParametrs = map[int]string{
 	EXCHANGE_PROTOCOL_VERSION: "EXCHANGE_PROTOCOL_VERSION:",
 }
 
-//Identification example
-
-//F_N_
-
 const (
 	EndOfData          = 0  // ";"
 	Error              = 1  // "E_"
@@ -60,25 +54,23 @@ const (
 	SetLightStatus     = 15 // "L_"
 )
 
-// Команды от принтера к клиенту
 const (
-	ItsTemperatureN    = 16 // "N_"
-	ItsTemperatureB    = 17 // "B_"
-	BufferACK          = 19 // "ok"
-	ImPrinting         = 20 // "P_"
-	MPositionX         = 21 // "X_"
-	MPositionY         = 22 // "Y_"
-	MPositionZ         = 23 // "Z_"
-	MBufferCommandSize = 24 // "S_"
-	MMaxBufferSize     = 25 // "^_"
-	MWidth             = 26 // "W_"
-	MLength            = 27 // "L_"
-	MHeight            = 28 // "H_"
-	MName              = 30 // "n_"
-	MType              = 31 // "T_"
+	MyTemperatureN      = 16 // "N_"
+	MyTemperatureB      = 17 // "B_"
+	BufferACK           = 19 // "ok"
+	ImPrinting          = 20 // "P_"
+	MyPositionX         = 21 // "X_"
+	MyPositionY         = 22 // "Y_"
+	MyPositionZ         = 23 // "Z_"
+	MyBufferCommandSize = 24 // "S_"
+	MyMaxBufferSize     = 25 // "^_"
+	MyWidth             = 26 // "W_"
+	MyLength            = 27 // "L_"
+	MyHeight            = 28 // "H_"
+	MyName              = 30 // "n_"
+	MyType              = 31 // "T_"
 )
 
-// Ошибки
 const (
 	ErrMemoryAlloc      = 32 // "0x01"
 	ErrParseCommand     = 33 // "0x02"
@@ -90,94 +82,44 @@ const (
 	SYNC                = 40
 )
 
-// Exchange protocols
-const (
-	AliPri_GCode_V1 = iota
-	AliPri_Images
-)
-
-// Таблица для сопоставления ID → строка
-type ExchangeProtocol struct {
-	Protocol int
+func GetCommand(command int) string {
+	return Commands[command]
 }
 
-func (EP *ExchangeProtocol) BuildTransmitData(Commands ...string) string {
-	strResult := ""
-	table := Protocols[EP.Protocol]
-	sample := table[Tamlate]
-	for _, Command := range Commands {
-		for _, template := range Tamlates {
-			strResult += strings.Replace(sample, template, Command, 1)
-		}
-	}
-	return strResult
+var Commands = map[int]string{
+	EndOfData:          "\r\n",
+	Error:              "E\r_",
+	StopPrint:          "!\r_",
+	GetTemps:           "M105",
+	GetBaseInformation: "&\r_",
+	Check:              "*\r_",
+	NowTemperatureBed:  "B\r_",
+	TemperatureNozzle:  "N\r_",
+	IsPrinting:         "P\r_",
+	ReadyToRead:        "R\r_",
+	BufferCommandSize:  "S\r_",
+	ItsGcodeCommand:    "G\r_",
+	ClearBuffer:        "C\r_",
+	SetLightStatus:     "L\r_",
+
+	BufferACK: "ok",
+	SYNC:      "+\r_",
 }
 
-func (EP *ExchangeProtocol) BuildTransmitDataInt(Commands ...int) string {
-	strResult := ""
-	table := Protocols[EP.Protocol]
-	sample := table[Tamlate]
-	for _, Command := range Commands {
-		for _, template := range Tamlates {
-			strResult += strings.Replace(sample, template, table[Command], 1)
-		}
-	}
-	return strResult
-}
-
-func (EP *ExchangeProtocol) Command(comm int) string {
-	return Protocols[EP.Protocol][comm]
-}
-
-const Tamlate = 6666
-
-var Tamlates = []string{"[COMMAND]", "[TYPE]"}
-
-var Protocols = []map[int]string{
-	0: map[int]string{
-		Tamlate:            "[COMMAND];",
-		EndOfData:          ";",
-		Error:              "E_",
-		StopPrint:          "!_",
-		GetTemps:           "@_",
-		GetAllInformation:  "#_",
-		CheckConnection:    "%_",
-		GetBaseInformation: "&_",
-		Check:              "*_",
-		NowTemperatureBed:  "B_",
-		TemperatureNozzle:  "N_",
-		IsPrinting:         "P_",
-		ReadyToRead:        "R_",
-		BufferCommandSize:  "S_",
-		ItsGcodeCommand:    "G_",
-		ClearBuffer:        "C_",
-		SetLightStatus:     "L_",
-
-		ItsTemperatureN:    "N_",
-		ItsTemperatureB:    "B_",
-		BufferACK:          "ok",
-		ImPrinting:         "P_",
-		MPositionX:         "X_",
-		MPositionY:         "Y_",
-		MPositionZ:         "Z_",
-		MBufferCommandSize: "S_",
-		MMaxBufferSize:     "^_",
-		MWidth:             "W_",
-		MLength:            "L_",
-		MHeight:            "H_",
-		MName:              "n_",
-		MType:              "T_",
-
-		ErrMemoryAlloc:      "0x01",
-		ErrParseCommand:     "0x02",
-		ErrUndefinedCommand: "0x03",
-		ErrOutOfRange:       "0x04",
-		ErrBufferOverflow:   "0x05",
-		ErrTXBufferOverflow: "0x06",
-		ErrRXBufferOverflow: "0x07",
-
-		SYNC: "+_",
-	},
+var CNC_Data = map[int]string{
+	MyPositionX:         "X\r_",
+	MyPositionY:         "Y\r_",
+	MyPositionZ:         "Z\r_",
+	MyBufferCommandSize: "S\r_",
+	MyMaxBufferSize:     "^\r_",
+	MyWidth:             "W\r_",
+	MyLength:            "L\r_",
+	MyHeight:            "H\r_",
+	MyName:              "n\r_",
+	MyType:              "T\r_",
+	MyTemperatureN:      "N\r_",
+	MyTemperatureB:      "B\r_",
+	ImPrinting:          "P\r_",
 }
 
 const PrinterTimeOut = 10

@@ -50,41 +50,38 @@ const (
 	ErrRXBufferOverflow = 38 // "0x07"
 )
 
-// Таблица для сопоставления ID → строка
 var V1Commands = map[int]string{
-	EndOfData:          ";",
-	Error:              "E_",
-	StopPrint:          "!_",
-	GetTemps:           "@_",
-	GetAllInformation:  "#_",
-	CheckConnection:    "%_",
-	GetBaseInformation: "&_",
-	Check:              "*_",
-	NowTemperatureBed:  "B_",
-	TemperatureNozzle:  "N_",
-	IsPrinting:         "P_",
-	ReadyToRead:        "R_",
-	BufferCommandSize:  "S_",
-	ItsGcodeCommand:    "G_",
-	ClearBuffer:        "C_",
-	SetLightStatus:     "L_",
-
-	ItsTemperatureN:    "N_",
-	ItsTemperatureB:    "B_",
-	CheckPrinter:       "*_",
+	EndOfData:          "\r\n",
+	Error:              "E\r_",
+	StopPrint:          "!\r_",
+	GetTemps:           "M105",
+	CheckConnection:    "%\r_",
+	GetBaseInformation: "&\r_",
+	Check:              "*\r_",
+	NowTemperatureBed:  "B\r_",
+	TemperatureNozzle:  "N\r_",
+	IsPrinting:         "P\r_",
+	ReadyToRead:        "R\r_",
+	BufferCommandSize:  "S\r_",
+	ItsGcodeCommand:    "G\r_",
+	ClearBuffer:        "C\r_",
+	SetLightStatus:     "L\r_",
+	ItsTemperatureN:    "N\r_",
+	ItsTemperatureB:    "B\r_",
+	CheckPrinter:       "*\r_",
 	BufferACK:          "ok",
-	ImPrinting:         "P_",
-	MPositionX:         "X_",
-	MPositionY:         "Y_",
-	MPositionZ:         "Z_",
-	MBufferCommandSize: "S_",
-	MMaxBufferSize:     "^_",
-	MWidth:             "W_",
-	MLength:            "L_",
-	MHeight:            "H_",
-	MVersion:           "V_",
-	MName:              "n_",
-	MType:              "T_",
+	ImPrinting:         "P\r_",
+	MPositionX:         "X\r_",
+	MPositionY:         "Y\r_",
+	MPositionZ:         "Z\r_",
+	MBufferCommandSize: "S\r_",
+	MMaxBufferSize:     "^\r_",
+	MWidth:             "W\r_",
+	MLength:            "L\r_",
+	MHeight:            "H\r_",
+	MVersion:           "V\r_",
+	MName:              "N\r_",
+	MType:              "T\r_",
 
 	ErrMemoryAlloc:      "0x01",
 	ErrParseCommand:     "0x02",
@@ -97,96 +94,3 @@ var V1Commands = map[int]string{
 
 const PrinterTimeOut = 10
 const InformationUpdateTime = 4
-
-// #ifndef COMANDS_H
-
-// #define COMANDS_H
-
-// #define Debug_Flag1          UART_send_byte('1')
-
-// #define Debug_Flag2          UART_send_byte('2')
-
-// #define Debug_Flag3          UART_send_byte('3')
-
-// #define Debug_Flag4          UART_send_byte('4')
-
-// #define Debug_Flag5          UART_send_byte('5')
-
-// #define Debug_Flag6          UART_send_byte('6')
-
-// #define Debug_Flag7          UART_send_byte('7')
-
-// #define Debug_Flag8          UART_send_byte('8')
-
-// #define endComand            ";"
-
-// #define EndComandByte        ';'
-
-// #define UnknownValue         "__"
-
-// //////////////////////////////////////////////////To the printer
-
-// #define StopPrint            "!_"
-// //#define StartPrint           "@_"
-
-// #define GetAllInformation    "#_"
-
-// #define GetBaseInformation   "&_"
-
-// #define Check                "*_"
-
-// #define GetTemps             "@_"
-
-// #define NowTemperatureBed    "B_"
-
-// #define NowTemperatureNozzle "N_"
-
-// #define ReadyToRead          "R_"
-
-// #define BufferComandSize     "S_"
-
-// ///////////////////////////////////////////////////
-
-// ///////////////////////////////////////////////////From the printer
-
-// #define MTemperatureNozzle "N_%d"
-
-// #define MTemperatureBed    "B_%d"
-
-// #define M_PositionX        "X_%d"
-
-// #define M_PositionY        "Y_%d"
-
-// #define M_PositionZ        "Z_%d"
-
-// #define M_BufferComandSize "S_%d"
-
-// #define ErrorPrinter       "E_%d"
-
-// #define M_Name             "n_%s"
-
-// #define M_Version          "V_%s"
-
-// #define M_Width            "W_%d"
-
-// #define M_Length           "L_%d"
-
-// #define M_Height           "H_%d"
-
-// #define M_Type             "T_%s"
-
-// ////////////////////////////////////////////////////GCode
-
-// #define G0  "G0"
-
-// #define G1  "G1"
-
-// #define G2  "G2"
-
-// #define G28 "G28"
-
-// /////////////////////////////////////////////////////
-
-// /////////////////////////////////////////////////////Errors code
-
-// /////////////////////////////////////////////////////

@@ -4,7 +4,6 @@ import (
 	"CNCManager/CNC/CNCService"
 	"CNCManager/CNC/CNCService/Connectors"
 	"bufio"
-	"encoding/json"
 	"errors"
 	"log"
 	"strconv"
@@ -12,6 +11,8 @@ import (
 	"sync"
 	"time"
 )
+
+var Machines = map[string]AnyCNC{}
 
 const (
 	LogErrorPrefix        = "E_"
@@ -38,32 +39,28 @@ type CNCCore struct {
 	ReceiveBuffer []byte `json:"-"`
 
 	Mutex    sync.Mutex
-	Protocol CNCService.ExchangeProtocol
 	WatchDog *time.Timer
 	Logs     []string
 	WorkFile []string `json:"-"`
 }
 
 type CNC_DTO struct {
-	TARGET_MACHINE_NAME       string `json:"TARGET_MACHINE_NAME"`
-	MACHINE_TYPE              string `json:"MACHINE_TYPE"`
-	FIRMWARE_VERSION          string `json:"FIRMWARE_VERSION"`
-	IsWorking                 bool   `json:"isWorking"`
-	Connected                 bool   `json:"Connected"`
-	EXCHANGE_PROTOCOL_VERSION int    `json:"EXCHANGE_PROTOCOL_VERSION"`
-	ConnectionData            string `json:"-"`
-	UniqueKey                 string `json "UniqueKey"`
+	TARGET_MACHINE_NAME string `json:"TARGET_MACHINE_NAME"`
+	MACHINE_TYPE        string `json:"MACHINE_TYPE"`
+	FIRMWARE_VERSION    string `json:"FIRMWARE_VERSION"`
+	Connected           bool   `json:"Connected"`
+	ConnectionData      string `json:"-"`
+	UniqueKey           string `json "UniqueKey"`
 }
 
 func (cnc *CNCCore) ExecuteTask(file []byte) error {
-	return errors.New("this CNC can not be executing tasks")
-	//stub
+	return errors.New("this CNC can not be executing tasks") //stub
 }
 
 func (cnc *CNCCore) CNCStart() {
 	cnc.ReceiveBuffer = make([]byte, 512)
 	cnc.Transmitter = CNCService.NewTransmitter()
-	cnc.Transmitter.SyncBuffers(cnc.Connection, cnc.Protocol)
+	cnc.Transmitter.SyncBuffers(cnc.Connection)
 	go cnc.StartWatchcDog()
 	go cnc.ReadConnectionAsync()
 }
@@ -76,24 +73,31 @@ func (cnc *CNCCore) StartWatchcDog() {
 		cnc.DTO.MACHINE_TYPE + " timeot!")
 	cnc.writeLog(cnc.DTO.TARGET_MACHINE_NAME+" "+
 		cnc.DTO.MACHINE_TYPE+" timeot!", LogErrorPrefix)
-	cnc.DTO.IsWorking = false
+	cnc.DTO.Connected = false
 	cnc.Connection.Close()
 }
 
 func (cnc *CNCCore) InitDevice() error {
 	reader := CNCService.NewTimeoutReader(cnc.Connection, time.Second*2)
-	cnc.Connection.Write([]byte(CNCService.Identification))
+	cnc.Connection.Write([]byte(CNCService.Identification + CNCService.GetCommand(CNCService.EndOfData)))
 	res := reader.Read()
 	if res == "" {
 		return errors.New("the device did not respond to the request")
 	}
+	commands := strings.Split(res, CNCService.GetCommand(CNCService.EndOfData))
 
-	err := (json.Unmarshal([]byte(res), &cnc.DTO))
-	if err != nil {
-		return err
+	for _, comm := range commands {
+
+		switch comm {
+		case CNCService.CNC_Data[CNCService.MyName]:
+			cnc.DTO.TARGET_MACHINE_NAME = comm
+		case CNCService.CNC_Data[CNCService.MyType]:
+			cnc.DTO.MACHINE_TYPE = comm
+		}
 	}
+
+	cnc.DTO.ConnectionData = cnc.Connection.GetName()
 	cnc.DTO.Connected = true
-	cnc.Protocol.Protocol = cnc.DTO.EXCHANGE_PROTOCOL_VERSION
 	return nil
 }
 
@@ -110,7 +114,8 @@ func (cnc *CNCCore) writeLog(log, logLevel string) {
 func (cnc *CNCCore) ReadConnectionAsync() {
 	cnc.ReceiveBuffer = cnc.ReceiveBuffer[:0]
 	reader := bufio.NewReader(cnc.Connection)
-	for cnc.DTO.IsWorking {
+
+	for cnc.DTO.Connected {
 		Byte, ex := reader.ReadByte()
 		if ex != nil {
 			cnc.writeLog(ex.Error(), LogErrorPrefix)
@@ -193,6 +198,7 @@ func Connect(typeOfConnection string, connectionData string) (AnyCNC, error) {
 		}
 	case "IP":
 		strs := strings.Split(connectionData, ":")
+		log.Println(connectionData)
 		var ip, port string
 		if len(strs) == 2 {
 			ip = strs[0]
@@ -206,6 +212,7 @@ func Connect(typeOfConnection string, connectionData string) (AnyCNC, error) {
 	default:
 		return nil, errors.New("undefined type of connection")
 	}
+
 	err := Core.Connection.Connect()
 	if err != nil {
 		return nil, err
@@ -221,9 +228,13 @@ func (cnc *CNCCore) LoadFileForWork(file []byte) error {
 		return errors.New("device is not connected")
 	}
 
-	if cnc.DTO.IsWorking {
+	if cnc.DTO.Connected {
 		return errors.New("printer is already print")
 	}
 	cnc.WorkFile = strings.Split(DataFile, "\n")
 	return nil
+}
+
+func RegisterCNC(name string, f func() AnyCNC) {
+	Machines[name] = f()
 }

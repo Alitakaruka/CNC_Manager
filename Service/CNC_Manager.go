@@ -40,7 +40,7 @@ func (CNC_M *CNCManagerr) Connect(conData ConnectionData) error {
 
 func (CNC_M *CNCManagerr) IsConnected(index int) bool {
 	DTO := CNC_M.CNC_Machines[index].GetDTO()
-	return DTO.IsWorking
+	return DTO.Connected
 }
 
 func (CNC_M *CNCManagerr) findByConnectionData(ConData ConnectionData) (int, bool) {

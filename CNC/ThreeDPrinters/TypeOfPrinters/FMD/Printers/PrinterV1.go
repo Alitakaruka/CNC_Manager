@@ -1,6 +1,7 @@
 package AtmegaPrinter
 
 import (
+	"CNCManager/CNC"
 	"CNCManager/CNC/CNCService"
 	FDMPrinter "CNCManager/CNC/ThreeDPrinters/TypeOfPrinters/FMD"
 )
@@ -14,26 +15,30 @@ func (P *AtmegaPrinter) ExecuteTask(file []byte) error {
 	if err != nil {
 		return err
 	}
-	P.DTO.IsWorking = true
+	P.DTO.Connected = true
 	go func() {
 		for _, Data := range P.WorkFile {
 			if Data == "" {
 				continue
 			}
-			if !P.DTO.IsWorking {
+			if !P.DTO.Connected {
 				break
 			}
 			res := "" //:= (FDMPrinter.Prepare_Command_to_printer(Data))
-			if res == "" || res == P.Protocol.Command(CNCService.EndOfData) {
+			if res == "" || res == CNCService.Commands[CNCService.EndOfData] {
 				continue
 			}
 			P.SendMessage([]byte(res))
 		}
-		P.DTO.IsWorking = false
+		P.DTO.Connected = false
 	}()
 	return nil
 }
 
 func InitAtmegaPrinter() {
-
+	Mfunck := func() CNC.AnyCNC {
+		return &AtmegaPrinter{}
+	}
+	CNC.RegisterCNC("ATM16", Mfunck)
+	CNC.RegisterCNC("ATM32", Mfunck)
 }

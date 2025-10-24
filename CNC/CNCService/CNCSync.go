@@ -133,18 +133,18 @@ func NewTransmitter() *Transmitter {
 	return transmitter
 }
 
-func (transmitter *Transmitter) SyncBuffers(Connection io.ReadWriter, proto ExchangeProtocol) {
+func (transmitter *Transmitter) SyncBuffers(Connection io.ReadWriter) {
 	reader := NewTimeoutReader(Connection, time.Second*2)
-	Connection.Write([]byte(proto.BuildTransmitDataInt(SYNC)))
+	Connection.Write([]byte(Commands[SYNC]))
 	result := reader.Read()
 	if result == "" {
 		return
 	}
-	comands := strings.Split(result, proto.Command(EndOfData))
+	comands := strings.Split(result, Commands[EndOfData])
 
 	for _, val := range comands {
-		if strings.HasPrefix(val, proto.Command(EndOfData)) {
-			str, _ := strings.CutPrefix(val, proto.Command(MMaxBufferSize))
+		if strings.HasPrefix(val, Commands[EndOfData]) {
+			str, _ := strings.CutPrefix(val, Commands[MyMaxBufferSize])
 			MaxSize, err := strconv.Atoi(str)
 			if err != nil {
 				log.Println(err)
@@ -152,7 +152,7 @@ func (transmitter *Transmitter) SyncBuffers(Connection io.ReadWriter, proto Exch
 			transmitter.SetMaxBufferSize(uint(MaxSize))
 		}
 	}
-	Connection.Write([]byte(proto.Command(ClearBuffer)))
+	Connection.Write([]byte(Commands[ClearBuffer]))
 	reader.Read()
 	transmitter.SetBufferSize(transmitter.maxValue)
 }
@@ -167,6 +167,34 @@ func NewTimeoutReader(r io.Reader, timeout time.Duration) *TimeoutReader {
 	return &TimeoutReader{reader: r, TimeOut: timeout}
 }
 
+func (PR *TimeoutReader) ReadBytes() []byte {
+	readBuf := make([]byte, 256)
+	PR.buffer = PR.buffer[:0]
+
+	timer := time.NewTimer(PR.TimeOut)
+	defer timer.Stop()
+
+	for {
+		select {
+		case <-timer.C:
+			return PR.buffer
+		default:
+			n, err := PR.reader.Read(readBuf)
+			if err != nil {
+				return PR.buffer
+			}
+
+			if n > 0 {
+				PR.buffer = append(PR.buffer, readBuf[:n]...)
+
+				if !timer.Stop() {
+					<-timer.C // clear chan
+				}
+				timer.Reset(PR.TimeOut)
+			}
+		}
+	}
+}
 func (PR *TimeoutReader) Read() string {
 	readBuf := make([]byte, 256)
 	PR.buffer = PR.buffer[:0]
