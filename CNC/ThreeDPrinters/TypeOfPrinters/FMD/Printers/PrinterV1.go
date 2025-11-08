@@ -15,22 +15,22 @@ func (P *AtmegaPrinter) ExecuteTask(file []byte) error {
 	if err != nil {
 		return err
 	}
-	P.DTO.Connected = true
+	P.DTO.Flags.Connected = true
 	go func() {
 		for _, Data := range P.WorkFile {
 			if Data == "" {
 				continue
 			}
-			if !P.DTO.Connected {
+			if !P.DTO.Flags.Connected {
 				break
 			}
 			res := "" //:= (FDMPrinter.Prepare_Command_to_printer(Data))
-			if res == "" || res == CNCService.Commands[CNCService.EndOfData] {
+			if res == "" || res == CNCService.EndOfData {
 				continue
 			}
 			P.SendMessage([]byte(res))
 		}
-		P.DTO.Connected = false
+		P.DTO.Flags.Connected = false
 	}()
 	return nil
 }

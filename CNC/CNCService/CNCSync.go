@@ -135,16 +135,16 @@ func NewTransmitter() *Transmitter {
 
 func (transmitter *Transmitter) SyncBuffers(Connection io.ReadWriter) {
 	reader := NewTimeoutReader(Connection, time.Second*2)
-	Connection.Write([]byte(Commands[SYNC]))
+	Connection.Write([]byte(SYNC))
 	result := reader.Read()
 	if result == "" {
 		return
 	}
-	comands := strings.Split(result, Commands[EndOfData])
+	comands := strings.Split(result, EndOfData)
 
 	for _, val := range comands {
-		if strings.HasPrefix(val, Commands[EndOfData]) {
-			str, _ := strings.CutPrefix(val, Commands[MyMaxBufferSize])
+		if strings.HasPrefix(val, EndOfData) {
+			str, _ := strings.CutPrefix(val, MyMaxBufferSize)
 			MaxSize, err := strconv.Atoi(str)
 			if err != nil {
 				log.Println(err)
@@ -152,7 +152,7 @@ func (transmitter *Transmitter) SyncBuffers(Connection io.ReadWriter) {
 			transmitter.SetMaxBufferSize(uint(MaxSize))
 		}
 	}
-	Connection.Write([]byte(Commands[ClearBuffer]))
+	Connection.Write([]byte(ClearBuffer))
 	reader.Read()
 	transmitter.SetBufferSize(transmitter.maxValue)
 }
@@ -198,28 +198,40 @@ func (PR *TimeoutReader) ReadBytes() []byte {
 func (PR *TimeoutReader) Read() string {
 	readBuf := make([]byte, 256)
 	PR.buffer = PR.buffer[:0]
-
-	timer := time.NewTimer(PR.TimeOut)
-	defer timer.Stop()
-
 	for {
-		select {
-		case <-timer.C:
+		timer := time.NewTimer(PR.TimeOut)
+		n, err := PR.readWithTimeout(readBuf, timer)
+		timer.Stop()
+		if err != nil {
 			return string(PR.buffer)
-		default:
-			n, err := PR.reader.Read(readBuf)
-			if err != nil {
-				return string(PR.buffer)
-			}
-
-			if n > 0 {
-				PR.buffer = append(PR.buffer, readBuf[:n]...)
-
-				if !timer.Stop() {
-					<-timer.C // clear chan
-				}
-				timer.Reset(PR.TimeOut)
-			}
 		}
+
+		if n > 0 {
+			PR.buffer = append(PR.buffer, readBuf[:n]...)
+			continue
+		}
+		return string(PR.buffer)
+	}
+}
+
+func (PR *TimeoutReader) readWithTimeout(buf []byte, timer *time.Timer) (int, error) {
+	done := make(chan struct {
+		n   int
+		err error
+	})
+
+	go func() {
+		n, err := PR.reader.Read(buf)
+		done <- struct {
+			n   int
+			err error
+		}{n, err}
+	}()
+
+	select {
+	case result := <-done:
+		return result.n, result.err
+	case <-timer.C:
+		return 0, nil // timeout
 	}
 }

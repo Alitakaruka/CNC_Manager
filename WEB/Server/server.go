@@ -99,6 +99,7 @@ func (PS *PrinterServer) ConnectPrinter(w http.ResponseWriter, r *http.Request) 
 		log.Println("Failed to connect the printer due to: " + ex.Error())
 		return
 	}
+	log.Println("Connection is valid!")
 	w.Write([]byte("ok"))
 }
 
@@ -118,37 +119,6 @@ func (PS *PrinterServer) SendGCode(w http.ResponseWriter, r *http.Request) {
 	w.Write([]byte("ok"))
 }
 
-// func (PS *PrinterServer) SetColor(w http.ResponseWriter, r *http.Request) {
-// 	Red, err := strconv.Atoi(r.URL.Query().Get("R"))
-// 	if err != nil {
-// 		http.Error(w, err.Error(), http.StatusBadRequest)
-// 		return
-// 	}
-// 	Green, err := strconv.Atoi(r.URL.Query().Get("G"))
-// 	if err != nil {
-// 		http.Error(w, err.Error(), http.StatusBadRequest)
-// 		return
-// 	}
-// 	Blue, err := strconv.Atoi(r.URL.Query().Get("B"))
-// 	if err != nil {
-// 		http.Error(w, err.Error(), http.StatusBadRequest)
-// 		return
-// 	}
-// 	uniqueKey := r.URL.Query().Get("uniqueKey")
-
-// 	if uniqueKey == "" {
-// 		http.Error(w, "Unique key can not be empty", http.StatusBadRequest)
-// 		return
-// 	}
-// 	err = PS.Manager.SetColor(byte(Red), byte(Green), byte(Blue), uniqueKey)
-// 	if err != nil {
-// 		http.Error(w, err.Error(), http.StatusBadRequest)
-// 		return
-// 	}
-// 	w.Write([]byte("ok"))
-
-// }
-
 func (PS *PrinterServer) ExecuteTask(w http.ResponseWriter, r *http.Request) {
 	r.ParseForm()
 	file, _, ex := r.FormFile("PrintFile")
@@ -163,6 +133,23 @@ func (PS *PrinterServer) ExecuteTask(w http.ResponseWriter, r *http.Request) {
 	}
 	Key := r.URL.Query().Get("uniqueKey")
 	PS.Manager.ExecuteTask(Key, fileBytes)
+	w.Write([]byte("Start printing!"))
+}
+
+func (PS *PrinterServer) UploadFile(w http.ResponseWriter, r *http.Request) {
+	r.ParseForm()
+	file, _, ex := r.FormFile("PrintFile")
+	if ex != nil {
+		http.Error(w, ex.Error(), http.StatusBadRequest)
+		return
+	}
+	defer file.Close()
+	fileBytes, ex := io.ReadAll(file)
+	if ex != nil {
+		http.Error(w, ex.Error(), http.StatusBadRequest)
+	}
+	Key := r.URL.Query().Get("uniqueKey")
+	PS.Manager.UploadFile(Key, "test.gcode", fileBytes)
 	w.Write([]byte("Start printing!"))
 }
 
@@ -209,7 +196,6 @@ func (PS *PrinterServer) HandleWS(w http.ResponseWriter, r *http.Request) {
 		return WebSoc.WriteControl(websocket.PongMessage, []byte(appdata), time.Now().Add(5))
 	})
 	WebSoc.SetPongHandler(func(appdata string) error {
-		log.Println("Pong")
 		if appdata != "Ping" {
 			return errors.New("appdata error")
 		}

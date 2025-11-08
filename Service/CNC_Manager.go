@@ -31,16 +31,32 @@ func (CNC_M *CNCManagerr) Connect(conData ConnectionData) error {
 		if ex != nil {
 			return ex
 		}
-		CNC_M.CNC_Machines = append(CNC_M.CNC_Machines, newCNC)
-		newCNC.InitDevice()
-		newCNC.CNCStart()
+
+		var targer CNC.AnyCNC
+		var ok bool
+		err := newCNC.InitDevice()
+		if err != nil {
+			newCNC.CloseConnection()
+			return err
+		}
+
+		log.Println("CHIP:" + newCNC.GetDTO().Device_Chip_Name)
+		if targer, ok = CNC.Machines[newCNC.GetDTO().Device_Chip_Name]; !ok {
+			newCNC.CloseConnection()
+			return errors.New("the device has not register")
+		}
+		targer.SetDTO(newCNC.GetDTO())
+
+		CNC_M.CNC_Machines = append(CNC_M.CNC_Machines, targer)
+
+		targer.CNCStart()
 		return nil
 	}
 }
 
 func (CNC_M *CNCManagerr) IsConnected(index int) bool {
 	DTO := CNC_M.CNC_Machines[index].GetDTO()
-	return DTO.Connected
+	return DTO.Flags.Connected
 }
 
 func (CNC_M *CNCManagerr) findByConnectionData(ConData ConnectionData) (int, bool) {
@@ -146,4 +162,13 @@ func GenerateRandomKey() string {
 		panic(err)
 	}
 	return hex.EncodeToString(bytes)
+}
+
+func (CNC_M *CNCManagerr) UploadFile(key, filename string, file []byte) {
+	index, ok := CNC_M.findByKey(key)
+
+	if !ok {
+		return
+	}
+	CNC_M.CNC_Machines[index].UploadFile(filename, file)
 }

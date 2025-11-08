@@ -59,7 +59,7 @@ func (FDM *FDMPrinterData) CommandsInData() {
 	bufferCopy := append([]byte(nil), FDM.ReceiveBuffer...)
 	FDM.ReceiveBuffer = FDM.ReceiveBuffer[:0] //clear
 	FDM.Mutex.Unlock()
-	Commands := strings.Split(string(bufferCopy), CNCService.Commands[CNCService.EndOfData])
+	Commands := strings.Split(string(bufferCopy), CNCService.EndOfData)
 	for _, value := range Commands {
 		if value == "" {
 			continue
@@ -75,29 +75,29 @@ func (FDM *FDMPrinterData) CommandsInData() {
 func (FDM *FDMPrinterData) ParseCommand(Prefix, Command string) {
 	switch Prefix {
 
-	case CNCService.Commands[CNCService.BufferACK]:
+	case CNCService.BufferACK:
 		FDM.Transmitter.Increment()
-	case CNCService.Commands[CNCService.Check]:
+	case CNCService.Check:
 		log.Println("Check")
 		return
-	case CNCService.Commands[CNCService.MyTemperatureN]:
+	case CNCService.MyTemperatureN:
 		PrinterService.SetIntValue(&FDM.NowTempNozzle, Command, &FDM.Mutex)
-	case CNCService.Commands[CNCService.MyTemperatureB]:
+	case CNCService.MyTemperatureB:
 		PrinterService.SetIntValue(&FDM.NowTempBed, Command, &FDM.Mutex)
-	case CNCService.Commands[CNCService.MyPositionX]:
+	case CNCService.MyPositionX:
 		PrinterService.SetFloatValue(&FDM.MyXposition, Command, &FDM.Mutex)
-	case CNCService.Commands[CNCService.MyPositionY]:
+	case CNCService.MyPositionY:
 		PrinterService.SetFloatValue(&FDM.MyYposition, Command, &FDM.Mutex)
-	case CNCService.Commands[CNCService.MyPositionZ]:
+	case CNCService.MyPositionZ:
 		PrinterService.SetFloatValue(&FDM.MyZposition, Command, &FDM.Mutex)
-	case CNCService.Commands[CNCService.Error]:
+	case CNCService.Error:
 		// PrinterData, _ := strings.CutPrefix(Command, CNCService.Commands[CNCService.Error))
 		// FDM.Log_printer_error(PrinterData)
-	case CNCService.Commands[CNCService.MyLength]:
+	case CNCService.MyLength:
 		PrinterService.SetIntValue(&FDM.Length, Command, &FDM.Mutex)
-	case CNCService.Commands[CNCService.MyHeight]:
+	case CNCService.MyHeight:
 		PrinterService.SetIntValue(&FDM.Height, Command, &FDM.Mutex)
-	case CNCService.Commands[CNCService.MyWidth]:
+	case CNCService.MyWidth:
 		PrinterService.SetIntValue(&FDM.Width, Command, &FDM.Mutex)
 	default:
 		log.Printf("Undefined command:%v ,Len: %v", Command, len(FDM.ReceiveBuffer))
