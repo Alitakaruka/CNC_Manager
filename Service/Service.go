@@ -1,7 +1,8 @@
 package Service
 
 import (
-	AtmegaPrinter "PrinterManager/CNC/ThreeDPrinters/TypeOfPrinters/FMD/Printers"
+	laser "CNCManager/CNC/LASERS"
+	AtmegaPrinter "CNCManager/CNC/ThreeDPrinters/TypeOfPrinters/FMD/Printers"
 	"errors"
 	"log"
 	"os"
@@ -44,6 +45,7 @@ func GetConfig(path string) *Config {
 
 func InitPrinters() {
 	AtmegaPrinter.InitAtmegaPrinter()
+	laser.InitStandartLaser()
 	//TODO: other printers
 }
 
@@ -69,4 +71,19 @@ func ValidVersion(FirmwareVersion string) error {
 		return errors.New("minor is must")
 	}
 	return nil
+}
+
+func CRC16(data []byte) uint16 {
+	var crc uint16 = 0xFFFF
+	for _, b := range data {
+		crc ^= uint16(b)
+		for i := 0; i < 8; i++ {
+			if crc&1 != 0 {
+				crc = (crc >> 1) ^ 0xA001
+			} else {
+				crc >>= 1
+			}
+		}
+	}
+	return crc
 }

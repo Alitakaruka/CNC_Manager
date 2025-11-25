@@ -133,18 +133,18 @@ func NewTransmitter() *Transmitter {
 	return transmitter
 }
 
-func (transmitter *Transmitter) SyncBuffers(Connection io.ReadWriter, proto ExchangeProtocol) {
+func (transmitter *Transmitter) SyncBuffers(Connection io.ReadWriter) {
 	reader := NewTimeoutReader(Connection, time.Second*2)
-	Connection.Write([]byte(proto.BuildTransmitDataInt(SYNC)))
+	Connection.Write([]byte(SYNC))
 	result := reader.Read()
 	if result == "" {
 		return
 	}
-	comands := strings.Split(result, Commands.V1Commands[Commands.EndOfData])
+	comands := strings.Split(result, EndOfData)
 
 	for _, val := range comands {
-		if strings.HasPrefix(val, proto.Command(EndOfData)) {
-			str, _ := strings.CutPrefix(val, Commands.M_MaxBufferSize)
+		if strings.HasPrefix(val, EndOfData) {
+			str, _ := strings.CutPrefix(val, MyMaxBufferSize)
 			MaxSize, err := strconv.Atoi(str)
 			if err != nil {
 				log.Println(err)
@@ -152,7 +152,7 @@ func (transmitter *Transmitter) SyncBuffers(Connection io.ReadWriter, proto Exch
 			transmitter.SetMaxBufferSize(uint(MaxSize))
 		}
 	}
-	Connection.Write([]byte(Commands.ClearBuffer))
+	Connection.Write([]byte(ClearBuffer))
 	reader.Read()
 	transmitter.SetBufferSize(transmitter.maxValue)
 }
@@ -167,7 +167,7 @@ func NewTimeoutReader(r io.Reader, timeout time.Duration) *TimeoutReader {
 	return &TimeoutReader{reader: r, TimeOut: timeout}
 }
 
-func (PR *TimeoutReader) Read() string {
+func (PR *TimeoutReader) ReadBytes() []byte {
 	readBuf := make([]byte, 256)
 	PR.buffer = PR.buffer[:0]
 
@@ -177,11 +177,11 @@ func (PR *TimeoutReader) Read() string {
 	for {
 		select {
 		case <-timer.C:
-			return string(PR.buffer)
+			return PR.buffer
 		default:
 			n, err := PR.reader.Read(readBuf)
 			if err != nil {
-				return string(PR.buffer)
+				return PR.buffer
 			}
 
 			if n > 0 {
@@ -193,5 +193,45 @@ func (PR *TimeoutReader) Read() string {
 				timer.Reset(PR.TimeOut)
 			}
 		}
+	}
+}
+func (PR *TimeoutReader) Read() string {
+	readBuf := make([]byte, 256)
+	PR.buffer = PR.buffer[:0]
+	for {
+		timer := time.NewTimer(PR.TimeOut)
+		n, err := PR.readWithTimeout(readBuf, timer)
+		timer.Stop()
+		if err != nil {
+			return string(PR.buffer)
+		}
+
+		if n > 0 {
+			PR.buffer = append(PR.buffer, readBuf[:n]...)
+			continue
+		}
+		return string(PR.buffer)
+	}
+}
+
+func (PR *TimeoutReader) readWithTimeout(buf []byte, timer *time.Timer) (int, error) {
+	done := make(chan struct {
+		n   int
+		err error
+	})
+
+	go func() {
+		n, err := PR.reader.Read(buf)
+		done <- struct {
+			n   int
+			err error
+		}{n, err}
+	}()
+
+	select {
+	case result := <-done:
+		return result.n, result.err
+	case <-timer.C:
+		return 0, nil // timeout
 	}
 }

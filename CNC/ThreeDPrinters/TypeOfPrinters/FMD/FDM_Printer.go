@@ -1,15 +1,11 @@
 package FDM_Printer
 
 import (
-	PrinterService "PrinterManager/CNC/CNCService"
-	ThreeDPrinter "PrinterManager/CNC/ThreeDPrinters"
-	Commands "PrinterManager/CNC/ThreeDPrinters/Commands"
-	"bufio"
-	"errors"
+	"CNCManager/CNC"
+	"CNCManager/CNC/CNCService"
+	PrinterService "CNCManager/CNC/CNCService"
 	"log"
-	"strconv"
 	"strings"
-	"sync"
 	"time"
 )
 
@@ -21,15 +17,14 @@ const (
 )
 
 type FDMPrinterData struct {
-	ThreeDPrinter.PrinterDTO
+	CNC.CNCCore
 	////////////////////////
 	Width  int `json:"width"`
 	Length int `json:"length"`
 	Height int `json:"height"`
 	//////////////////////// Printer state
-	NowTempNozzle int  `json:"nowTempNozzle"`
-	NowTempBed    int  `json:"nowTempBed"`
-	IsPrinting    bool `json:"isPrinting"`
+	NowTempNozzle int `json:"nowTempNozzle"`
+	NowTempBed    int `json:"nowTempBed"`
 
 	//////////////////////// Printer position
 	MyXposition float32 `json:"myXposition"`
@@ -42,26 +37,7 @@ type FDMPrinterData struct {
 	WathcDog *time.Timer `json:"-"`
 	//////////////////////// Information
 	Loger  *PrinterService.Loger
-	Errors []error    `json:"-"`
-	Buffer []string   `json:"-"`
-	Mut    sync.Mutex `json:"-"`
-}
-
-func (FDM *FDMPrinterData) SetColorLight(R, G, B byte) {
-	FDM.SendMessege([]byte(Commands.SetLightStatus + "R" + strconv.Itoa(int(R)) +
-		"G" + strconv.Itoa(int(G)) +
-		"B" + strconv.Itoa(int(B))))
-}
-
-func (FDM *FDMPrinterData) InitAndStart() {
-	FDM.IsWorking = true
-	FDM.Loger = PrinterService.NewLoger(100)
-}
-
-func Prepare_Command_to_printer(command string) string {
-	command = Delete_comments(command)
-	command = strings.TrimSpace(command)
-	return command + Commands.EndOfData
+	Errors []error `json:"-"`
 }
 
 func Delete_comments(command string) string {
@@ -76,14 +52,15 @@ func Delete_comments(command string) string {
 }
 
 func (FDM *FDMPrinterData) CommandsInData() {
-	if len(FDM.Buffer) == 0 {
+	if len(FDM.ReceiveBuffer) == 0 {
 		return
 	}
-	FDM.Mut.Lock()
-	bufferCopy := append([]string(nil), FDM.Buffer...)
-	FDM.Buffer = FDM.Buffer[:0] //clear
-	FDM.Mut.Unlock()
-	for _, value := range bufferCopy {
+	FDM.Mutex.Lock()
+	bufferCopy := append([]byte(nil), FDM.ReceiveBuffer...)
+	FDM.ReceiveBuffer = FDM.ReceiveBuffer[:0] //clear
+	FDM.Mutex.Unlock()
+	Commands := strings.Split(string(bufferCopy), CNCService.EndOfData)
+	for _, value := range Commands {
 		if value == "" {
 			continue
 		}
@@ -98,117 +75,31 @@ func (FDM *FDMPrinterData) CommandsInData() {
 func (FDM *FDMPrinterData) ParseCommand(Prefix, Command string) {
 	switch Prefix {
 
-	case Commands.Buffer_ACK:
-		log.Println("ACK")
-		FDM.PrinterBuffer.Increment()
-	case Commands.CheckPrinter:
+	case CNCService.BufferACK:
+		FDM.Transmitter.Increment()
+	case CNCService.Check:
 		log.Println("Check")
 		return
-	case Commands.ItsTemperatureN:
-		PrinterService.SetIntValue(&FDM.NowTempNozzle, Command, &FDM.Mut)
-	case Commands.ItsTemperatureB:
-		PrinterService.SetIntValue(&FDM.NowTempBed, Command, &FDM.Mut)
-	case Commands.M_PositionX:
-		PrinterService.SetFloatValue(&FDM.MyXposition, Command, &FDM.Mut)
-	case Commands.M_PositionY:
-		PrinterService.SetFloatValue(&FDM.MyYposition, Command, &FDM.Mut)
-	case Commands.M_PositionZ:
-		PrinterService.SetFloatValue(&FDM.MyZposition, Command, &FDM.Mut)
-	case Commands.M_BufferCommandSize:
-		BufferSize, exe := strconv.Atoi(Command)
-		if exe != nil {
-			FDM.Errors = append(FDM.Errors, exe)
-		} else {
-			FDM.Mut.Lock()
-			FDM.PrinterBuffer.SetBufferSize(uint(BufferSize))
-			FDM.Mut.Unlock()
-		}
-	case Commands.Error:
-		PrinterData, _ := strings.CutPrefix(Command, Commands.Error)
-		FDM.Log_printer_error(PrinterData)
-	case Commands.M_Version:
-		PrinterService.SetStringValue(&FDM.Version, Command, &FDM.Mut)
-	case Commands.M_Name:
-		PrinterService.SetStringValue(&FDM.PrinterName, Command, &FDM.Mut)
-	case Commands.M_Type:
-		PrinterService.SetStringValue(&FDM.PrinterType, Command, &FDM.Mut)
-	case Commands.M_Length:
-		PrinterService.SetIntValue(&FDM.Length, Command, &FDM.Mut)
-	case Commands.M_Height:
-		PrinterService.SetIntValue(&FDM.Height, Command, &FDM.Mut)
-	case Commands.M_Width:
-		PrinterService.SetIntValue(&FDM.Width, Command, &FDM.Mut)
+	case CNCService.MyTemperatureN:
+		PrinterService.SetIntValue(&FDM.NowTempNozzle, Command, &FDM.Mutex)
+	case CNCService.MyTemperatureB:
+		PrinterService.SetIntValue(&FDM.NowTempBed, Command, &FDM.Mutex)
+	case CNCService.MyPositionX:
+		PrinterService.SetFloatValue(&FDM.MyXposition, Command, &FDM.Mutex)
+	case CNCService.MyPositionY:
+		PrinterService.SetFloatValue(&FDM.MyYposition, Command, &FDM.Mutex)
+	case CNCService.MyPositionZ:
+		PrinterService.SetFloatValue(&FDM.MyZposition, Command, &FDM.Mutex)
+	case CNCService.Error:
+		// PrinterData, _ := strings.CutPrefix(Command, CNCService.Commands[CNCService.Error))
+		// FDM.Log_printer_error(PrinterData)
+	case CNCService.MyLength:
+		PrinterService.SetIntValue(&FDM.Length, Command, &FDM.Mutex)
+	case CNCService.MyHeight:
+		PrinterService.SetIntValue(&FDM.Height, Command, &FDM.Mutex)
+	case CNCService.MyWidth:
+		PrinterService.SetIntValue(&FDM.Width, Command, &FDM.Mutex)
 	default:
-		log.Printf("Undefined command:%v ,Len: %v", Command, len(FDM.Buffer))
+		log.Printf("Undefined command:%v ,Len: %v", Command, len(FDM.ReceiveBuffer))
 	}
-}
-
-func (FDM *FDMPrinterData) SetFieldValue(Field, value *any) {
-	FDM.Mut.Lock()
-	*Field = *value
-	FDM.Mut.Unlock()
-}
-
-func (FDM *FDMPrinterData) SendMessege(message []byte) error {
-	log.Printf("BufferSize:%v", FDM.PrinterBuffer.GetValueData())
-	FDM.PrinterBuffer.WaitForNonZero()
-	FDM.PrinterBuffer.Decrement()
-
-	if FDM.Connection == nil {
-		return errors.New("printer does not connected")
-	}
-	_, ex := FDM.Connection.Write(message)
-	log.Printf("i send:%v\n", string(message))
-	if ex != nil {
-		log.Printf("Error sending:%v", ex.Error())
-	}
-	return ex
-}
-
-func (FDM *FDMPrinterData) ReadConnectionAsync() {
-	clear(FDM.Buffer)
-	reader := bufio.NewReader(FDM.Connection)
-	for FDM.IsWorking {
-		line, ex := reader.ReadString(Commands.EndCommandByte)
-		if ex != nil {
-			FDM.Errors = append(FDM.Errors, ex)
-		} else {
-			FDM.Mut.Lock()
-			FDM.WathcDog.Reset(time.Second * Commands.PrinterTimeOut)
-			if line == "" {
-				continue
-			}
-			res, _ := strings.CutSuffix(line, Commands.EndOfData)
-			FDM.Buffer = append(FDM.Buffer, res)
-			FDM.Mut.Unlock()
-		}
-	}
-}
-
-func (FDM *FDMPrinterData) StartWathcDog() {
-	FDM.WathcDog = time.NewTimer(time.Second * Commands.PrinterTimeOut)
-
-	<-FDM.WathcDog.C
-	log.Println("Printer timeot!")
-	FDM.IsWorking = false
-	FDM.Connection.Close()
-}
-
-func (FDM *FDMPrinterData) Log_printer_error(errorCode string) {
-	// Data.mutex.TryLock()
-	FDM.Mut.Lock()
-	switch errorCode {
-	case Commands.MemoryAllocError:
-		FDM.Errors = append(FDM.Errors, errors.New("memory alloc is faled"))
-	case Commands.ParseCommandError:
-		FDM.Errors = append(FDM.Errors, errors.New("the printer could not parse the command"))
-	case Commands.UndefinedCommand:
-		FDM.Errors = append(FDM.Errors, errors.New("the printer did not understand the command"))
-	case Commands.OutOfRange:
-		FDM.Errors = append(FDM.Errors, errors.New("the printer has exceeded its print limits"))
-	default:
-		FDM.Errors = append(FDM.Errors, errors.New("indefined error:"+errorCode))
-	}
-	FDM.Mut.Unlock()
-	// Data.mutex.Unlock()
 }
