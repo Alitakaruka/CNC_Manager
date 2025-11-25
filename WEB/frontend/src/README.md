@@ -28,7 +28,7 @@ All application-level messages are JSON objects:
 - `log`:
 ```json
 { "type": "log", "data": {"id":123, "timestamp": 1710000000000, "level":"info", "message":"...", "type":"system"} }
-```
+````
 - `ack` (response to a request with `reqId`):
 ```json
 { "type": "ack", "reqId": "1699999999999-1", "data": {"ok":true} }
@@ -60,14 +60,13 @@ Server must reply with `ack` or `error` including the same `reqId`.
   - Auto‑reconnect (exponential backoff), native ping/pong watchdog, `request(type,data)` resolved on `ack`.
   - `on(type, handler)` to subscribe to events (`status`, `systemInfo`, `log`).
 - `SystemHook` listens to WS events and falls back to HTTP snapshot if WS is offline.
-- `SendGCode` and `ConnectionHook` send WS requests first, HTTP fallback on error.
+- `SendGCode` и `ConnectionHook` работают **только** через WebSocket (HTTP отключён для этих действий).
 
 ## HTTP Fallback Endpoints (existing)
 - `GET /api/system/snapshot` → `{ connectionStatus, systemInfo }`
 - `GET /api/system/status`
 - `GET /api/system/info`
 - `GET /api/system/logs`
-- `POST /connect` body `{ TypeOfConnection, ConnectionData }`
 - `POST /api/sendGCode?GCode=...&uniqueKey=...`
 
 ## Notes for server implementers

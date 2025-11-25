@@ -4,7 +4,7 @@ import wsClient from './WebSocketClient'
 export const useSystemData = () => {
   const [systemData, setSystemData] = useState({
     connectionStatus: { online: 0, printing: 0, offline: 0, total: 0 },
-    systemInfo: { uptime: '0д 0ч 0м', activeConnections: 0, lastUpdate: new Date() },
+    systemInfo: { uptime: '0d 0h 0m', activeConnections: 0, lastUpdate: new Date() },
     logs: []
   })
   const [isLoading, setIsLoading] = useState(false)
@@ -20,7 +20,10 @@ export const useSystemData = () => {
       setSystemData(prev => ({ ...prev, connectionStatus: data }))
     })
     const offInfo = wsClient.on('systemInfo', (data) => {
-      setSystemData(prev => ({ ...prev, systemInfo: { ...data, lastUpdate: new Date() } }))
+      setSystemData(prev => ({ 
+  ...prev, 
+  systemInfo: { ...data, lastUpdate: new Date() }
+}))
     })
     const offLog = wsClient.on('log', (entry) => {
       setSystemData(prev => ({ ...prev, logs: [...prev.logs.slice(-9), entry] }))

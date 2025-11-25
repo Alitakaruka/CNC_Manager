@@ -1,151 +1,200 @@
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useState, useRef } from 'react'
 import { 
   Printer, 
+  Box,
   Wifi, 
+  Sunset,
   WifiOff, 
   Play, 
-  Pause, 
-  AlertCircle, 
-  CheckCircle,
   Clock,
   Thermometer,
-  Zap
+  Zap,
+  Droplet,
+  Layers,
+  Settings
 } from 'lucide-react'
 import { useLocalization } from '../../../hooks/useLocalization.jsx'
+import wsClient from '../../../hooks/WebSocketClient'
 
 function PrintersTable({ SetNowPrinter, SetDetailsIsOpen }) {
-  const [printers, setPrinters] = useState([])
-  const [error, setError] = useState(null)
+  const [cncs, setCncs] = useState([])
   const [loading, setLoading] = useState(true)
   const { t } = useLocalization()
+  const startedRef = useRef(false)
 
-  // Mock data for demonstration
-  const mockPrinters = [
-    {
-      uniqueKey: 'printer-001',
-      printerName: 'Ender 3 Pro',
-      printerType: 'FDM',
-      version: 'v2.0.1',
-      isWorking: true,
-      typeOfConnection: 'USB',
-      isPrinting: false,
-      nozzleTemp: 200,
-      bedTemp: 60,
-      progress: 0,
-      timeRemaining: 0
-    },
-    {
-      uniqueKey: 'printer-002', 
-      printerName: 'Prusa i3 MK3S+',
-      printerType: 'FDM',
-      version: 'v3.0.0',
-      isWorking: true,
-      typeOfConnection: 'WiFi',
-      isPrinting: true,
-      nozzleTemp: 215,
-      bedTemp: 65,
-      progress: 45,
-      timeRemaining: 3600
-    },
-    {
-      uniqueKey: 'printer-003',
-      printerName: 'Anycubic Photon',
-      printerType: 'SLA',
-      version: 'v1.5.2',
-      isWorking: false,
-      typeOfConnection: 'COM',
-      isPrinting: false,
-      nozzleTemp: 0,
-      bedTemp: 0,
-      progress: 0,
-      timeRemaining: 0
-    }
-  ]
-
-  function updateTableData(newPrinters) {
-    let changed = false
-    const updated = [...printers]
-
-    for (const newPrinter of newPrinters) {
-      const index = updated.findIndex(p => p.uniqueKey === newPrinter.uniqueKey)
-
-      if (index !== -1) {
-        const old = updated[index]
-        if (JSON.stringify(old) !== JSON.stringify(newPrinter)) {
-          updated[index] = newPrinter
-          changed = true
+  // // // HTTP fallback для загрузки CNC станков
+  const fetchCncs = async () => {
+    try {
+      const response = await fetch('/api/Printers', {
+        method: 'GET',
+        headers: { 'Content-Type': 'application/json' }
+      })
+      
+      if (response.ok) {
+        const json = await response.json()
+        if (Array.isArray(json)) {
+          setCncs(json)
+          setLoading(false)
         }
-      } else {
-        updated.push(newPrinter)
-        changed = true
       }
-    }
-
-    if (changed) {
-      setPrinters(updated)
+    } catch (err) {
+      console.log("Error loading CNC stations: " + err.message)
+      setLoading(false)
     }
   }
 
+  // // Запрос через WebSocket
+  const requestCncsViaWS = async () => {
+    try {
+      if (wsClient.isConnected) {
+        const data = await wsClient.request('GetMachines', {})
+        if (Array.isArray(data)) {
+          setCncs(data)
+          setLoading(false)
+          return true
+        }
+      }
+    } catch (err) {
+      console.log("WS request failed: " + err.message)
+    }
+    return false
+  }
+
+  // WebSocket handlers и начальная загрузка
   useEffect(() => {
-    const getDataFromServer = async () => {
-      try {
-        setLoading(true)
-        const response = await fetch('/api/Printers', {
-          method: 'GET',
-          headers: { 'Content-Type': 'application/json' }
-        })
-        
-        if (!response.ok) throw new Error('Failed to fetch printer list')
-        
-        const json = await response.json()
-        updateTableData(json)
-        setError(null)
-      } catch (err) {
-        console.log("Error loading printers: " + err.message)
-        // Убираем показ ошибки - просто оставляем пустой список
-        setError(null)
-        
-        // Не загружаем mock данные - оставляем пустой список
-        setTimeout(() => {
-          updateTableData([])
-          setError(null)
-          console.log('Нет подключенных принтеров')
-        }, 500)
-      } finally {
+    if (!startedRef.current) {
+      startedRef.current = true
+      wsClient.connect()
+    }
+
+    // Подписка на событие с полным списком CNC станков
+    const offPrinters = wsClient.on('printers', (data) => {
+      if (Array.isArray(data)) {
+        setCncs(data)
         setLoading(false)
       }
-    }
+    })
 
-    getDataFromServer()
-    const interval = setInterval(getDataFromServer, 10000) // Увеличили интервал до 10 секунд
-    return () => clearInterval(interval)
+    // Подписка на обновление отдельного CNC станка
+    const offPrinterUpdate = wsClient.on('printerUpdate', (cnc) => {
+      if (cnc && cnc.uniqueKey) {
+        setCncs(prev => {
+          const index = prev.findIndex(c => c.uniqueKey === cnc.uniqueKey)
+          if (index !== -1) {
+            const updated = [...prev]
+            updated[index] = { ...updated[index], ...cnc }
+            return updated
+          } else {
+            return [...prev, cnc]
+          }
+        })
+      }
+    })
+
+    // Запрос данных при подключении WebSocket
+    const offOpen = wsClient.on('open', async () => {
+      const success = await requestCncsViaWS()
+      if (!success) {
+        await fetchCncs()
+      }
+    })
+
+    // Начальная загрузка данных
+    const loadInitialData = async () => {
+      setLoading(true)
+      if (wsClient.isConnected) {
+        const success = await requestCncsViaWS()
+        if (!success) {
+          await fetchCncs()
+        }
+      } else {
+        await fetchCncs()
+      }
+    }
+    loadInitialData()
+
+    // Fallback polling только если WebSocket не подключен
+    let interval
+    const visibilityHandler = () => {
+      clearInterval(interval)
+      if (!wsClient.isConnected) {
+        const ms = document.visibilityState === 'visible' ? 5000 : 10000
+        interval = setInterval(() => {
+          if (!wsClient.isConnected) {
+            fetchCncs()
+          }
+        }, ms)
+      }
+    }
+    
+    document.addEventListener('visibilitychange', visibilityHandler)
+    visibilityHandler()
+    
+    return () => {
+      offPrinters()
+      offPrinterUpdate()
+      offOpen()
+      document.removeEventListener('visibilitychange', visibilityHandler)
+      clearInterval(interval)
+    }
   }, [])
 
-  const showPrinterDetails = (printer) => {
-    SetNowPrinter(printer)
-    SetDetailsIsOpen(printer)
+  const showCncDetails = (cnc) => {
+    SetNowPrinter(cnc)
+    SetDetailsIsOpen(cnc)
   }
 
-  const getStatusIcon = (printer) => {
-    if (!printer.isWorking) {
+  const getStatusIcon = (cnc) => {
+    const isWorking = cnc.isWorking !== undefined ? cnc.isWorking : cnc.Flags?.Connected
+    const executingTask = cnc.Flags?.ExecutingTask
+    
+    if (!isWorking) {
       return <WifiOff className="h-4 w-4 text-danger-500" />
     }
-    if (printer.isPrinting) {
+    if (executingTask) {
       return <Play className="h-4 w-4 text-success-500 animate-pulse" />
     }
     return <Wifi className="h-4 w-4 text-success-500" />
   }
 
-  const getStatusText = (printer) => {
-    if (!printer.isWorking) return t('printers.status.offline')
-    if (printer.isPrinting) return t('printers.status.printing')
+  const getStatusText = (cnc) => {
+    const isWorking = cnc.isWorking !== undefined ? cnc.isWorking : cnc.Flags?.Connected
+    const executingTask = cnc.Flags?.ExecutingTask
+    
+    if (!isWorking) return t('printers.status.offline')
+    if (executingTask) return t('printers.status.printing')
     return t('printers.status.ready')
   }
 
-  const getStatusClass = (printer) => {
-    if (!printer.isWorking) return 'status-offline'
-    if (printer.isPrinting) return 'status-printing'
+  const getStatusClass = (cnc) => {
+    const isWorking = cnc.isWorking !== undefined ? cnc.isWorking : cnc.Flags?.Connected
+    const executingTask =cnc.Flags?.ExecutingTask
+    
+    if (!isWorking) return 'status-offline'
+    if (executingTask) return 'status-printing'
     return 'status-online'
+  }
+
+  const getPrinterIcon = (cnc) => {
+    const printerType = (cnc.CncType || cnc.printerType || cnc.MACHINE_TYPE || '').toUpperCase()
+    
+    switch (printerType) {
+      case 'FDM':
+      case 'FDM_PRINTER':
+        return <Box className="h-5 w-5 text-primary-600 dark:text-primary-400" />
+      case 'LASER':
+        return <Sunset className="h-5 w-5 text-primary-600 dark:text-primary-400" />
+      case 'SLA':
+      case 'SLA_PRINTER':
+        return <Droplet className="h-5 w-5 text-primary-600 dark:text-primary-400" />
+      case 'SLS':
+      case 'SLS_PRINTER':
+        return <Layers className="h-5 w-5 text-primary-600 dark:text-primary-400" />
+      case 'MILLING':
+        return <Settings className="h-5 w-5 text-primary-600 dark:text-primary-400" />
+      default:
+        return <Printer className="h-5 w-5 text-primary-600 dark:text-primary-400" />
+    }
   }
 
   const formatTime = (seconds) => {
@@ -174,22 +223,20 @@ function PrintersTable({ SetNowPrinter, SetDetailsIsOpen }) {
           <Printer className="h-6 w-6 text-primary-600 dark:text-primary-400" />
           <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-100">{t('navigation.printers')}</h2>
           <span className="bg-primary-100 text-primary-800 text-xs font-medium px-2.5 py-0.5 rounded-full dark:bg-primary-900/40 dark:text-primary-300">
-            {printers.length}
+            {cncs.length}
           </span>
         </div>
-        <div className="flex items-center space-x-2 text-sm text-gray-500 dark:text-gray-400">
-          <div className="flex items-center space-x-1">
-            <div className="w-2 h-2 bg-success-500 rounded-full"></div>
-            <span>{t('header.online')}: {printers.filter(p => p.isWorking).length}</span>
+          <div className="flex items-center space-x-2 text-sm text-gray-500 dark:text-gray-400">
+            <div className="flex items-center space-x-1">
+              <div className="w-2 h-2 bg-success-500 rounded-full"></div>
+              <span>{t('header.online')}: {cncs.filter(c => c.isWorking !== undefined ? c.isWorking : c.Flags?.Connected).length}</span>
+            </div>
+            <div className="flex items-center space-x-1">
+              <div className="w-2 h-2 bg-warning-500 rounded-full animate-pulse"></div>
+              <span>{t('header.printing')}: {cncs.filter(c => c.executingTask !== undefined ? c.executingTask : c.Flags?.ExecutingTask).length}</span>
+            </div>
           </div>
-          <div className="flex items-center space-x-1">
-            <div className="w-2 h-2 bg-warning-500 rounded-full animate-pulse"></div>
-            <span>{t('header.printing')}: {printers.filter(p => p.isPrinting).length}</span>
-          </div>
-        </div>
       </div>
-
-      {/* Убрали показ ошибки */}
 
       {/* Table */}
       <div className="overflow-x-auto">
@@ -199,69 +246,63 @@ function PrintersTable({ SetNowPrinter, SetDetailsIsOpen }) {
               <th className="px-4 py-3 text-left rounded-l-lg">{t('navigation.printers')}</th>
               <th className="px-4 py-3 text-left">{t('printers.details.type')}</th>
               <th className="px-4 py-3 text-left">{t('printers.details.status')}</th>
-              <th className="px-4 py-3 text-left">{t('printers.details.nozzle')} / {t('printers.details.bed')}</th>
+              <th className="px-4 py-3 text-left">Position (X/Y/Z)</th>
               <th className="px-4 py-3 text-left">{t('printers.details.progress')}</th>
               <th className="px-4 py-3 text-left rounded-r-lg">{t('printers.details.connection')}</th>
             </tr>
           </thead>
           <tbody>
-            {printers.map((printer, index) => (
+            {cncs.map((cnc, index) => (
               <tr
-                key={printer.uniqueKey}
+                key={cnc.uniqueKey}
                 className="table-row border-b border-gray-100 hover:bg-primary-50 transition-colors duration-200 cursor-pointer dark:border-gray-700 dark:hover:bg-gray-800"
-                onClick={() => showPrinterDetails(printer)}
+                onClick={() => showCncDetails(cnc)}
               >
                 <td className="px-4 py-4">
                   <div className="flex items-center space-x-3">
                     <div className="p-2 bg-primary-100 rounded-lg dark:bg-primary-900/40">
-                      <Printer className="h-5 w-5 text-primary-600 dark:text-primary-400" />
+                      {getPrinterIcon(cnc)}
                     </div>
                     <div>
-                      <div className="font-medium text-gray-900 dark:text-gray-100">{printer.printerName || 'Unnamed'}</div>
-                      <div className="text-sm text-gray-500 dark:text-gray-400">v{printer.version || 'Unknown'}</div>
+                      <div className="font-medium text-gray-900 dark:text-gray-100">{cnc.CNCName || cnc.TARGET_MACHINE_NAME || 'Unnamed'}</div>
                     </div>
                   </div>
                 </td>
                 <td className="px-4 py-4">
                   <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-200">
-                    {printer.printerType || 'Unknown'}
+                    {cnc.CncType || cnc.printerType || cnc.MACHINE_TYPE || 'Unknown'}
                   </span>
                 </td>
                 <td className="px-4 py-4">
                   <div className="flex items-center space-x-2">
-                    {getStatusIcon(printer)}
-                    <span className={getStatusClass(printer)}>
-                      {getStatusText(printer)}
+                    {getStatusIcon(cnc)}
+                    <span className={getStatusClass(cnc)}>
+                      {getStatusText(cnc)}
                     </span>
                   </div>
                 </td>
                 <td className="px-4 py-4">
-                  <div className="flex items-center space-x-3 text-sm">
-                    <div className="flex items-center space-x-1">
-                      <Thermometer className="h-4 w-4 text-orange-500" />
-                      <span>{printer.nozzleTemp}°C</span>
-                    </div>
-                    <div className="flex items-center space-x-1">
-                      <Zap className="h-4 w-4 text-blue-500" />
-                      <span>{printer.bedTemp}°C</span>
-                    </div>
+                  <div className="text-sm text-gray-700 dark:text-gray-300">
+                    {typeof cnc?.position?.X === 'number' || typeof cnc?.position?.Y === 'number' || typeof cnc?.position?.Z === 'number'
+                      ? `${cnc.position?.X ?? '-'} / ${cnc.position?.Y ?? '-'} / ${cnc.position?.Z ?? '-'}`
+                      : '--'}
                   </div>
                 </td>
                 <td className="px-4 py-4">
-                  {printer.isPrinting ? (
+                  {cnc.executingTask ? (
                     <div className="space-y-1">
                       <div className="flex items-center justify-between text-sm">
-                        <span>{printer.progress}%</span>
+                        <span>{cnc.progress || 0}%</span>
                         <Clock className="h-4 w-4 text-gray-400" />
                       </div>
                       <div className="w-full bg-gray-200 rounded-full h-2 dark:bg-gray-700">
                         <div
                           className="bg-success-500 h-2 rounded-full transition-all duration-500"
-                          style={{ width: `${printer.progress}%` }}
+                          style={{ width: `${cnc.progress || 0}%` }}
                         />
                       </div>
                       <div className="text-xs text-gray-500 dark:text-gray-400">
-                        {formatTime(printer.timeRemaining)}
+                        {formatTime(cnc.timeRemaining || 0)}
                       </div>
                     </div>
                   ) : (
@@ -270,7 +311,7 @@ function PrintersTable({ SetNowPrinter, SetDetailsIsOpen }) {
                 </td>
                 <td className="px-4 py-4">
                   <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300">
-                    {printer.typeOfConnection || 'Unknown'}
+                    {cnc.typeOfConnection || 'Unknown'}
                   </span>
                 </td>
               </tr>
@@ -280,7 +321,7 @@ function PrintersTable({ SetNowPrinter, SetDetailsIsOpen }) {
       </div>
 
       {/* Empty State */}
-      {printers.length === 0 && !loading && (
+      {cncs.length === 0 && !loading && (
         <div className="text-center py-12">
           <Printer className="h-12 w-12 text-gray-400 mx-auto mb-4" />
           <h3 className="text-lg font-medium text-gray-900 mb-2 dark:text-gray-100">

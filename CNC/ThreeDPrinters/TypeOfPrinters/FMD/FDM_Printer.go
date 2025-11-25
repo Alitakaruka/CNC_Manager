@@ -2,11 +2,8 @@ package FDM_Printer
 
 import (
 	"CNCManager/CNC"
-	"CNCManager/CNC/CNCService"
-	PrinterService "CNCManager/CNC/CNCService"
-	"log"
+	"strconv"
 	"strings"
-	"time"
 )
 
 const (
@@ -18,26 +15,12 @@ const (
 
 type FDMPrinterData struct {
 	CNC.CNCCore
-	////////////////////////
-	Width  int `json:"width"`
-	Length int `json:"length"`
-	Height int `json:"height"`
 	//////////////////////// Printer state
-	NowTempNozzle int `json:"nowTempNozzle"`
-	NowTempBed    int `json:"nowTempBed"`
-
-	//////////////////////// Printer position
-	MyXposition float32 `json:"myXposition"`
-	MyYposition float32 `json:"myYposition"`
-	MyZposition float32 `json:"myZposition"`
-
+	ExtruderTemp  int `json:"nowTempNozzle"`
+	ExtruderTemp1 int `json:"nowTempNozzle1"`
+	TempBed       int `json:"nowTempBed"`
 	////////////////////////
 	HasLight bool
-	////////////////////////
-	WathcDog *time.Timer `json:"-"`
-	//////////////////////// Information
-	Loger  *PrinterService.Loger
-	Errors []error `json:"-"`
 }
 
 func Delete_comments(command string) string {
@@ -51,55 +34,13 @@ func Delete_comments(command string) string {
 	return command
 }
 
-func (FDM *FDMPrinterData) CommandsInData() {
-	if len(FDM.ReceiveBuffer) == 0 {
-		return
-	}
-	FDM.Mutex.Lock()
-	bufferCopy := append([]byte(nil), FDM.ReceiveBuffer...)
-	FDM.ReceiveBuffer = FDM.ReceiveBuffer[:0] //clear
-	FDM.Mutex.Unlock()
-	Commands := strings.Split(string(bufferCopy), CNCService.EndOfData)
-	for _, value := range Commands {
-		if value == "" {
-			continue
-		}
-		r := []rune(value)
-		Prefix := string(r[:2])
-		Command, _ := strings.CutPrefix(value, Prefix)
-		FDM.ParseCommand(Prefix, Command)
-	}
-
-}
-
-func (FDM *FDMPrinterData) ParseCommand(Prefix, Command string) {
+func (FDM *FDMPrinterData) ParseCommand(Prefix, dataStr string) {
 	switch Prefix {
-
-	case CNCService.BufferACK:
-		FDM.Transmitter.Increment()
-	case CNCService.Check:
-		log.Println("Check")
-		return
-	case CNCService.MyTemperatureN:
-		PrinterService.SetIntValue(&FDM.NowTempNozzle, Command, &FDM.Mutex)
-	case CNCService.MyTemperatureB:
-		PrinterService.SetIntValue(&FDM.NowTempBed, Command, &FDM.Mutex)
-	case CNCService.MyPositionX:
-		PrinterService.SetFloatValue(&FDM.MyXposition, Command, &FDM.Mutex)
-	case CNCService.MyPositionY:
-		PrinterService.SetFloatValue(&FDM.MyYposition, Command, &FDM.Mutex)
-	case CNCService.MyPositionZ:
-		PrinterService.SetFloatValue(&FDM.MyZposition, Command, &FDM.Mutex)
-	case CNCService.Error:
-		// PrinterData, _ := strings.CutPrefix(Command, CNCService.Commands[CNCService.Error))
-		// FDM.Log_printer_error(PrinterData)
-	case CNCService.MyLength:
-		PrinterService.SetIntValue(&FDM.Length, Command, &FDM.Mutex)
-	case CNCService.MyHeight:
-		PrinterService.SetIntValue(&FDM.Height, Command, &FDM.Mutex)
-	case CNCService.MyWidth:
-		PrinterService.SetIntValue(&FDM.Width, Command, &FDM.Mutex)
-	default:
-		log.Printf("Undefined command:%v ,Len: %v", Command, len(FDM.ReceiveBuffer))
+	case ExtruderTemp:
+		FDM.ExtruderTemp, _ = strconv.Atoi(dataStr)
+	case Extruder1Temp:
+		FDM.ExtruderTemp1, _ = strconv.Atoi(dataStr)
+	case BedTemp:
+		FDM.TempBed, _ = strconv.Atoi(dataStr)
 	}
 }

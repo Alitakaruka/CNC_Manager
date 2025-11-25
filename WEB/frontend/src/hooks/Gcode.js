@@ -2,7 +2,7 @@ import wsClient from './WebSocketClient'
 
 export default async function SendGCode(GCodeStr, UniqueKey) {
   if (!GCodeStr || !UniqueKey || UniqueKey === "Unknown") {
-    throw new Error("Неверные параметры: G-code или ключ принтера отсутствуют")
+    throw new Error("Неверные параметры: G-code или ключ CNC станка отсутствуют")
   }
 
   // Try WS command

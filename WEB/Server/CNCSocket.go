@@ -1,70 +1,120 @@
 package Server
 
 import (
-	"crypto/sha1"
-	"encoding/base64"
-	"log"
-	"net"
-	"net/http"
+	"encoding/json"
+	"sync"
+
+	"github.com/gorilla/websocket"
 )
 
-const (
-	MessageTypeText   = 1
-	MessageTypeBinaty = 2
-	MessageTypeClose  = 8
-	MessageTypePing   = 9
-	MessageTypePong   = 10
-)
-
-type CNCSocket struct {
-	net.Conn
+type WSTransmiterr struct {
+	Data  string
+	Flag  bool
+	mutex sync.Mutex
+	cond  *sync.Cond
 }
 
-func (CNC_Soc *CNCSocket) ReadMessage() (string, error) {
-	buffer := make([]byte, 512)
-	n, err := CNC_Soc.Read(buffer)
+func NewWSTransmiterr() *WSTransmiterr {
+	ws := &WSTransmiterr{}
+	ws.cond = sync.NewCond(&ws.mutex)
+	return ws
+}
+
+func (ws *WSTransmiterr) WaitNewData() {
+	ws.mutex.Lock()
+	defer ws.mutex.Unlock()
+
+	old := ws.Data
+	for old == ws.Data {
+		ws.cond.Wait()
+	}
+}
+
+func (ws *WSTransmiterr) SetNewData(data string) {
+	ws.mutex.Lock()
+	ws.Data = data
+	ws.cond.Broadcast()
+	ws.mutex.Unlock()
+}
+
+func (ws *WSTransmiterr) GetNowData() string {
+	ws.mutex.Lock()
+	defer ws.mutex.Unlock()
+	return ws.Data
+}
+
+type WSConnection struct {
+	WS    websocket.Conn
+	Mutex sync.Mutex
+}
+
+type WSMessage struct {
+	Type  string          `json:"type"`
+	ReqId string          `json:"reqId"`
+	Data  json.RawMessage `json:"data"`
+}
+
+type jsonWsGcode struct {
+	gcode     string
+	uniqueKey string
+	reqId     string
+}
+
+type WSError struct {
+	Type  string `json:"type"`
+	ReqId string `json:"reqId"`
+	data  struct {
+	} `json:"data"`
+}
+
+func WEB_Socket_ACK(reqId string, ok bool) []byte {
+	responceACk := struct {
+		Type  string `json:"type"`
+		ReqId string `json:"reqId"`
+		Data  struct {
+			Ok bool `json:"ok"`
+		} `json:"data"`
+	}{Type: "ack", ReqId: reqId}
+	responceACk.Data.Ok = ok
+	js, err := json.Marshal(responceACk)
 	if err != nil {
-		return "", err
+		return []byte{}
 	}
-	if n != 0 {
-
-	}
-	return "", nil
+	return js
 }
 
-func (CNC_Soc *CNCSocket) decodeFrame(frame []byte) string {
-	payloadLen := int(frame[1] & 127)     // 131 & 127 = 3 (длина данных)
-	maskKey := frame[2:6]                 // 4 байта маски
-	maskedData := frame[6 : 6+payloadLen] // зашифрованные данные
+func WEB_Socket_ERROR(reqId, msg string) []byte {
 
-	// Снимаем маску
-	decoded := make([]byte, payloadLen)
-	for i := 0; i < payloadLen; i++ {
-		decoded[i] = maskedData[i] ^ maskKey[i%4]
+	responceError := struct {
+		Type    string `json:"type"`
+		ReqId   string `json:"reqId"`
+		Message string `json:"message"`
+	}{Type: "error", ReqId: reqId, Message: msg}
+	js, err := json.Marshal(responceError)
+	if err != nil {
+		return []byte{}
 	}
-	return string(decoded)
-}
-func computeAcceptKey(key string) string {
-	const magic = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"
-	h := sha1.New()
-	h.Write([]byte(key + magic))
-	return base64.StdEncoding.EncodeToString(h.Sum(nil))
+	return js
 }
 
-func HandleWS(w http.ResponseWriter, r *http.Request) *CNCSocket {
-	CNC_Sock := CNCSocket{}
-	if r.Header.Get("Upgrade") != "websocket" {
-		return nil
+func WEB_Socket_LOG(id, Timestamp uint32, level, msg string) []byte {
+	template := struct {
+		Type string `json:"type"`
+		Data struct {
+			Id        uint32 `json:"id"`
+			Timestamp uint32 `json:"timestamp"`
+			Level     string `json:"level"`
+			Message   string `json:"message"`
+		} `json:"data"`
+	}{Type: "log"}
+	template.Data.Id = id
+	template.Data.Level = level
+	template.Data.Timestamp = Timestamp
+	template.Data.Message = msg
+
+	js, err := json.Marshal(template)
+	if err != nil {
+		return []byte{}
 	}
-	key := r.Header.Get("Sec-WebSocket-Key")
-	accept := computeAcceptKey(key)
-	w.Header().Set("Upgrade", "websocket")
-	w.Header().Set("Connection", "Upgrade")
-	w.Header().Set("Sec-WebSocket-Accept", accept)
-	w.WriteHeader(http.StatusSwitchingProtocols)
-	hj, _ := w.(http.Hijacker)
-	conn, _, _ := hj.Hijack()
-	log.Println("New Socket")
-	CNC_Sock.Conn = conn
-	return &CNC_Sock
+	return js
 }

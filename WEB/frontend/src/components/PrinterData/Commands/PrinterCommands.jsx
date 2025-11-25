@@ -3,6 +3,8 @@ import { motion } from 'framer-motion'
 import { 
   Move, 
   ArrowUp, 
+  Minus,
+  Plus,
   ArrowDown, 
   ArrowLeft, 
   ArrowRight, 
@@ -57,8 +59,10 @@ export default function PrinterCommands({ uniqueKey }) {
       return
     }
 
+    // Формируем команду движения для CNC станка
+
     const value = direction * stepValue
-    const gcode = `G91\nG1 ${axis}${value.toFixed(2)} F3000\nG90`
+    const gcode = `G1 ${axis}${value.toFixed(2)}`
     
     setIsSending(true)
     try {
@@ -77,6 +81,7 @@ export default function PrinterCommands({ uniqueKey }) {
       return
     }
 
+    // Отправка команды на CNC станок
     setIsSending(true)
     try {
       await SendGCode(command, uniqueKey)
@@ -90,8 +95,6 @@ export default function PrinterCommands({ uniqueKey }) {
 
   const quickCommands = [
     { command: 'G28', label: t('printers.commands.homeAll'), icon: Home, color: 'bg-blue-500 hover:bg-blue-600' },
-    { command: 'G28 X0 Y0', label: t('printers.commands.homeXY'), icon: Target, color: 'bg-green-500 hover:bg-green-600' },
-    { command: 'G28 Z0', label: t('printers.commands.homeZ'), icon: ArrowUp, color: 'bg-purple-500 hover:bg-purple-600' },
     { command: 'M84', label: t('printers.commands.disableMotors'), icon: Square, color: 'bg-red-500 hover:bg-red-600' },
   ]
 
@@ -129,9 +132,9 @@ export default function PrinterCommands({ uniqueKey }) {
               whileHover={{ scale: 1.05 }}
               whileTap={{ scale: 0.95 }}
             >
-              <ArrowUp className="h-4 w-4 mx-auto" />
+              <Plus className="h-4 w-4 mx-auto" />
             </motion.button>
-            <div className="text-center text-xs font-medium text-gray-600">Z+</div>
+            <div className="text-center text-xs font-medium text-gray-600"><span>Z</span></div>
             <motion.button
               onClick={() => moveAxis('Z', -1)}
               disabled={isSending}
@@ -139,7 +142,7 @@ export default function PrinterCommands({ uniqueKey }) {
               whileHover={{ scale: 1.05 }}
               whileTap={{ scale: 0.95 }}
             >
-              <ArrowDown className="h-4 w-4 mx-auto" />
+              <Minus className="h-4 w-4 mx-auto" />
             </motion.button>
           </div>
 
@@ -152,9 +155,9 @@ export default function PrinterCommands({ uniqueKey }) {
               whileHover={{ scale: 1.05 }}
               whileTap={{ scale: 0.95 }}
             >
-              <ArrowUp className="h-4 w-4 mx-auto" />
+              <Plus className="h-4 w-4 mx-auto" />
             </motion.button>
-            <div className="text-center text-xs font-medium text-gray-600">Y+</div>
+            <div className="text-center text-xs font-medium text-gray-600"><span>Y</span></div>
             <motion.button
               onClick={() => moveAxis('Y', -1)}
               disabled={isSending}
@@ -162,7 +165,7 @@ export default function PrinterCommands({ uniqueKey }) {
               whileHover={{ scale: 1.05 }}
               whileTap={{ scale: 0.95 }}
             >
-              <ArrowDown className="h-4 w-4 mx-auto" />
+              <Minus className="h-4 w-4 mx-auto" />
             </motion.button>
           </div>
 
@@ -174,9 +177,9 @@ export default function PrinterCommands({ uniqueKey }) {
               whileHover={{ scale: 1.05 }}
               whileTap={{ scale: 0.95 }}
             >
-              <ArrowRight className="h-4 w-4 mx-auto" />
+              <Plus className="h-4 w-4 mx-auto" />
             </motion.button>
-            <div className="text-center text-xs font-medium text-gray-600">X+</div>
+            <div className="text-center text-xs font-medium text-gray-600"><span>X</span></div>
             <motion.button
               onClick={() => moveAxis('X', -1)}
               disabled={isSending}
@@ -184,7 +187,7 @@ export default function PrinterCommands({ uniqueKey }) {
               whileHover={{ scale: 1.05 }}
               whileTap={{ scale: 0.95 }}
             >
-              <ArrowLeft className="h-4 w-4 mx-auto" />
+              <Minus className="h-4 w-4 mx-auto" />
             </motion.button>
           </div>
         </div>

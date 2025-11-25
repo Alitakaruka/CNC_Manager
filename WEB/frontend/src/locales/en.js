@@ -68,7 +68,8 @@ export default {
       nozzle: 'Spindle',
       bed: 'Table',
       progress: 'Progress',
-      timeRemaining: 'Time Remaining'
+      timeRemaining: 'Time Remaining',
+      reconnect: 'Reconnect'
     },
     controls: {
       printControl: 'Job Control',
