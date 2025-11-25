@@ -5,7 +5,7 @@ export default function MainPage() {
   return (
     <div className="min-h-screen">
       <Header />
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <main className="w-full px-6 lg:px-10 py-6">
         <div>
           <PrinterData />
         </div>

@@ -72,7 +72,6 @@ npm run build
 ## 🔧 API Endpoints
 
 - `GET /api/Printers` - Получение списка принтеров
-- `POST /connect` - Подключение к принтеру
 - `POST /api/StartPrint` - Запуск печати
 - `POST /api/sendGCode` - Отправка G-code команд
 

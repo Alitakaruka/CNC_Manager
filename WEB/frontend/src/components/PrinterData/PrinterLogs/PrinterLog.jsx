@@ -15,6 +15,7 @@ import {
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { useLocalization } from '../../../hooks/useLocalization.jsx'
+import wsClient from '../../../hooks/WebSocketClient'
 
 export default function PrinterLogs() {
   const [logs, setLogs] = useState([])
@@ -23,31 +24,48 @@ export default function PrinterLogs() {
   const [filter, setFilter] = useState('all')
   const [searchTerm, setSearchTerm] = useState('')
   const logsEndRef = useRef(null)
-  const { t, currentLanguage } = useLocalization()
+  const startedRef = useRef(false)
+  const { t } = useLocalization()
 
-  // Mock logs for demonstration (только начальные)
-  const initialLogs = [
-    {
-      id: 1,
-      timestamp: new Date(Date.now() - 60000),
-      level: 'info',
-      message: 'Система запущена',
-      printer: 'System',
-      type: 'system'
-    },
-    {
-      id: 2,
-      timestamp: new Date(Date.now() - 45000),
-      level: 'success',
-      message: 'Готов к работе',
-      printer: 'System',
-      type: 'system'
-    }
-  ]
-
+  // Подписка на WebSocket события для получения логов
   useEffect(() => {
-    // Загружаем только начальные логи один раз
-    setLogs(initialLogs)
+    if (!startedRef.current) {
+      startedRef.current = true
+      wsClient.connect()
+    }
+
+    // Подписка на событие 'log'
+    const offLog = wsClient.on('log', (logData) => {
+      console.log('Received log:', logData) // Для отладки
+      
+      if (logData && typeof logData === 'object') {
+        // Преобразуем timestamp из uint32 (секунды) в Date объект
+        // uint32 timestamp всегда в секундах, умножаем на 1000 для миллисекунд
+        const timestampDate = logData.timestamp 
+          ? new Date(logData.timestamp * 1000) 
+          : new Date()
+
+        // Преобразуем данные из бэкенда в формат, ожидаемый фронтендом
+        const newLog = {
+          id: logData.id || Date.now() + Math.random(), // Используем id из данных или генерируем уникальный
+          timestamp: timestampDate,
+          level: (logData.level || 'info').toLowerCase(),
+          message: logData.message || '',
+          printer: logData.printer || logData.printerName || 'System',
+          type: logData.type || 'system'
+        }
+
+        setLogs(prev => {
+          // Ограничиваем количество логов (например, последние 500)
+          const updated = [...prev, newLog]
+          return updated.slice(-500)
+        })
+      }
+    })
+
+    return () => {
+      offLog()
+    }
   }, [])
 
   useEffect(() => {
@@ -145,7 +163,7 @@ export default function PrinterLogs() {
     return logs.filter(log => level === 'all' || log.level === level).length
   }
 
-  const containerClass = `card ${currentLanguage === 'ru' ? 'h-auto min-h-[28rem]' : 'h-full'} dark:bg-gray-800/70 dark:border-gray-700`
+  const containerClass = `card h-fit dark:bg-gray-800/70 dark:border-gray-700`
 
   return (
     <motion.div

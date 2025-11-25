@@ -94,7 +94,11 @@ class WebSocketClient {
         return;
       }
       this.emit('message', msg);
-      if (msg.type) this.emit(msg.type, msg.data);
+      if (msg.type) {
+        // Поддерживаем оба варианта: data (строчная) и Data (заглавная)
+        const data = msg.data ?? null;
+        this.emit(msg.type, data);
+      }
     };
 
     this.ws.onclose = () => {

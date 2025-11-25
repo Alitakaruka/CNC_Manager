@@ -68,7 +68,8 @@ export default {
       nozzle: 'Шпиндель',
       bed: 'Стол',
       progress: 'Прогресс',
-      timeRemaining: 'Осталось времени'
+      timeRemaining: 'Осталось времени',
+      reconnect: 'Переподключить'
     },
     controls: {
       printControl: 'Управление задачей',

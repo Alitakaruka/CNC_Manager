@@ -20,26 +20,8 @@ var MachinesTypes = map[int]string{
 }
 
 const (
-	FIRMWARE_NAME             = 1
-	MACHINE_TYPE              = 2
-	MACHINE_NAME              = 3
-	FIRMWARE_VERSION          = 4
-	EXCHANGE_PROTOCOL_VERSION = 5
-)
-
-var MachinesParametrs = map[int]string{
-	FIRMWARE_NAME:             "FIRMWARE_NAME:",
-	MACHINE_TYPE:              "MACHINE_TYPE:",
-	MACHINE_NAME:              "TARGET_MACHINE_NAME:",
-	FIRMWARE_VERSION:          "FIRMWARE_VERSION:",
-	EXCHANGE_PROTOCOL_VERSION: "EXCHANGE_PROTOCOL_VERSION:",
-}
-
-const (
 	EndOfData          = "\r\n" // ";"
-	Error              = "E_"   // "E_"
 	StopPrint          = "!_"   // "!_"
-	GetTemps           = "@_"   // "@_"
 	GetAllInformation  = "#_"   // "#_"
 	CheckConnection    = "%_"   // "%_"
 	GetBaseInformation = "&_"   // "&_"
@@ -65,6 +47,7 @@ const (
 	MyBufferCommandSize = "Buf:"        // "S_"
 	MyMaxBufferSize     = "^_"          // "^_"
 
+	Error            = "Error:"    // "E_"
 	MyWidth          = "M_Width:"  // "W_"
 	MyLength         = "M_Length:" // "L_"
 	MyHeight         = "M_Height:" // "H_"

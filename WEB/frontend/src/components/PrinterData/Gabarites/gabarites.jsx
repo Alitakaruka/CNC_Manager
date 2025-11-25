@@ -21,7 +21,7 @@
       <div className="PrinterState">
         <p><strong>Nozzle temp:</strong> <span id="NozzleTemp">{PrinterDataRef.current.NozzleTemp}</span></p>
         <p><strong>Bed temp:</strong> <span id="BedTemp">{PrinterDataRef.current.BedTemp}</span></p>
-        <p><strong>Is printing:</strong> <span id="IsPrinting">{PrinterDataRef.current.IsPrinting === true ? "Yes" : "No"}</span></p>
+        <p><strong>Is printing:</strong> <span id="IsPrinting">{PrinterDataRef.current.executingTask === true ? "Yes" : "No"}</span></p>
       </div>
     </div>
     )

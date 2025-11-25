@@ -9,24 +9,24 @@ import (
 	"time"
 )
 
-type PrinterBuffer struct {
+type CNCBuffer struct {
 	nowValue uint
 	maxValue uint
 	mutex    sync.Mutex
 	cond     *sync.Cond
 }
 
-func (PB *PrinterBuffer) GetValueData() uint {
+func (PB *CNCBuffer) GetValueData() uint {
 	return PB.nowValue
 }
 
-func (PB *PrinterBuffer) Decrement() {
+func (PB *CNCBuffer) Decrement() {
 	PB.mutex.Lock()
 	PB.nowValue -= 1
 	PB.mutex.Unlock()
 }
 
-func (PB *PrinterBuffer) Increment() {
+func (PB *CNCBuffer) Increment() {
 	PB.mutex.Lock()
 	if PB.nowValue < PB.maxValue {
 		PB.nowValue++
@@ -35,19 +35,19 @@ func (PB *PrinterBuffer) Increment() {
 	PB.mutex.Unlock()
 }
 
-func (PB *PrinterBuffer) SetBufferSize(value uint) {
+func (PB *CNCBuffer) SetBufferSize(value uint) {
 	PB.mutex.Lock()
 	PB.nowValue = value
 	PB.mutex.Unlock()
 }
 
-func (PB *PrinterBuffer) SetMaxBufferSize(value uint) {
+func (PB *CNCBuffer) SetMaxBufferSize(value uint) {
 	PB.mutex.Lock()
 	PB.maxValue = value
 	PB.mutex.Unlock()
 }
 
-func (PB *PrinterBuffer) GetBufferSize() uint {
+func (PB *CNCBuffer) GetBufferSize() uint {
 	PB.mutex.Lock()
 	for PB.nowValue == 0 {
 		PB.cond.Wait()
@@ -57,7 +57,7 @@ func (PB *PrinterBuffer) GetBufferSize() uint {
 	return value
 }
 
-func (PB *PrinterBuffer) WaitForNonZero() {
+func (PB *CNCBuffer) WaitForNonZero() {
 	PB.mutex.Lock()
 	for PB.nowValue == 0 {
 		PB.cond.Wait()
@@ -65,8 +65,8 @@ func (PB *PrinterBuffer) WaitForNonZero() {
 	PB.mutex.Unlock()
 }
 
-func NewPrinterBuffer() *PrinterBuffer {
-	PB := &PrinterBuffer{nowValue: 1, maxValue: 1}
+func NewCNCBuffer() *CNCBuffer {
+	PB := &CNCBuffer{nowValue: 1, maxValue: 1}
 	PB.cond = sync.NewCond(&PB.mutex)
 	return PB
 }
@@ -235,3 +235,5 @@ func (PR *TimeoutReader) readWithTimeout(buf []byte, timer *time.Timer) (int, er
 		return 0, nil // timeout
 	}
 }
+
+// type CNCBuffer

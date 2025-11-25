@@ -3,13 +3,14 @@ package Server
 import (
 	Service "CNCManager/Service"
 	"embed"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"log"
 	"net/http"
-	"os"
+	"sync"
 	"time"
 
 	"github.com/gorilla/websocket"
@@ -19,7 +20,15 @@ import (
 //go:embed files/index.html
 var ServerFile embed.FS
 
-type PrinterServer struct {
+type CNCServer struct {
+	SecondsWork uint32
+	Connections uint32
+
+	TimerUpdader  *WSTransmiterr
+	StatusUpdader *WSTransmiterr
+	TableUpdader  *WSTransmiterr
+	LogsUpdader   *WSTransmiterr
+
 	Manager     Service.CNCManagerr
 	mux         *http.ServeMux
 	port        string
@@ -27,39 +36,30 @@ type PrinterServer struct {
 	PrinterRepo Service.PrinterRepository
 }
 
-func (PS *PrinterServer) InitServer() {
-	//Config
-	config := Service.GetConfig("config.yaml")
-	var port, addr, sqlPath, logerPath string
-	if config == nil {
-		port = "8080"
-		addr = "0.0.0.0"
-		sqlPath = "CNCManagerDB.db"
-		logerPath = "Logs.log"
-	} else {
-		port = config.Server.Port
-		addr = config.Server.Addr
-		sqlPath = config.Database.Path
-		logerPath = config.Logs.Path
-	}
+func (PS *CNCServer) InitServer(port, addr, sqlPath string) {
+
 	PS.port = port
 	PS.Adrr = addr
-	//
-	startLoger(logerPath)
+
 	Service.InitPrinters()
 	PS.PrinterRepo.InitRepository(sqlPath)
 	PS.mux = http.NewServeMux()
-	fs := http.FS(ServerFile)
-	PS.mux.Handle("/", http.FileServer(fs))
-	//PS.mux.HandleFunc("/", mainHandled)
-	PS.mux.HandleFunc("/connect", PS.ConnectPrinter)
+	//fs := http.FS(ServerFile)
+	//PS.mux.Handle("/", http.FileServer(fs))
+	PS.mux.HandleFunc("/", mainHandled)
+	// PS.mux.HandleFunc("/connect", PS.ConnectPrinter)
 	PS.mux.HandleFunc("/ws", PS.HandleWS)
-	PS.mux.HandleFunc("/api/Printers", PS.GetPrintersInformation)
-	PS.mux.HandleFunc("/api/ExecuteTask", PS.ExecuteTask)
-	PS.mux.HandleFunc("/api/SaveSettings", PS.saveSettings)
-	PS.mux.HandleFunc("/api/GetSettings", PS.getSettings)
-	PS.mux.HandleFunc("/api/sendGCode", PS.SendGCode)
-	// PS.mux.HandleFunc("/api/SetColor", PS.SetColor)
+	// PS.mux.HandleFunc("/api/Printers", PS.GetPrintersInformation)
+	// PS.mux.HandleFunc("/api/ExecuteTask", PS.ExecuteTask)
+	// PS.mux.HandleFunc("/api/SaveSettings", PS.saveSettings)
+	// PS.mux.HandleFunc("/api/GetSettings", PS.getSettings)
+	// PS.mux.HandleFunc("/api/sendGCode", PS.SendGCode)
+
+	//
+	PS.TimerUpdader = NewWSTransmiterr()
+	PS.StatusUpdader = NewWSTransmiterr()
+	PS.TableUpdader = NewWSTransmiterr()
+	PS.LogsUpdader = NewWSTransmiterr()
 }
 
 func CatchPanic(context string) {
@@ -68,19 +68,36 @@ func CatchPanic(context string) {
 	}
 }
 
-func (PS *PrinterServer) Serve() {
-	defer CatchPanic("main")
-	fmt.Printf("Server started: %s\n", PS.Adrr+":"+PS.port)
-	go PS.Manager.LoggingAsync()
-	err := http.ListenAndServe(PS.Adrr+":"+PS.port, PS.mux)
-	if err != nil {
-		fmt.Println(err)
-		panic(err)
+func (PS *CNCServer) CountTime() {
+	ticker := time.NewTicker(time.Second)
+
+	for {
+		<-ticker.C
+		PS.SecondsWork++
 	}
 }
 
+func (PS *CNCServer) Serve() {
+	defer CatchPanic("main")
+
+	go PS.CountTime()
+	go PS.UpdateLogs()
+
+	go PS.UpdateCNCTable()
+	go PS.UpdateStatus()
+	go PS.UpdateTimer()
+
+	log.Printf("Server started: %s\n", PS.Adrr+":"+PS.port)
+	err := http.ListenAndServe(PS.Adrr+":"+PS.port, PS.mux)
+	if err != nil {
+		log.Println(err)
+		panic(err)
+	}
+
+}
+
 // HTTP +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-func (PS *PrinterServer) ConnectPrinter(w http.ResponseWriter, r *http.Request) {
+func (PS *CNCServer) ConnectPrinter(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "undefined query", http.StatusBadRequest)
 		log.Println("undefined query")
@@ -95,15 +112,14 @@ func (PS *PrinterServer) ConnectPrinter(w http.ResponseWriter, r *http.Request) 
 	}
 	ex = PS.Manager.Connect(information)
 	if ex != nil {
-		http.Error(w, "Failed to connect the printer due to: "+ex.Error(), http.StatusBadRequest)
-		log.Println("Failed to connect the printer due to: " + ex.Error())
+		http.Error(w, "Failed to connect the CNC due to: "+ex.Error(), http.StatusBadRequest)
+		log.Println("Failed to connect the CNC due to: " + ex.Error())
 		return
 	}
-	log.Println("Connection is valid!")
 	w.Write([]byte("ok"))
 }
 
-func (PS *PrinterServer) SendGCode(w http.ResponseWriter, r *http.Request) {
+func (PS *CNCServer) SendGCode(w http.ResponseWriter, r *http.Request) {
 	Gcode := r.URL.Query().Get("GCode")
 	uniqueKey := r.URL.Query().Get("uniqueKey")
 	log.Println(r.URL.Query())
@@ -119,24 +135,45 @@ func (PS *PrinterServer) SendGCode(w http.ResponseWriter, r *http.Request) {
 	w.Write([]byte("ok"))
 }
 
-func (PS *PrinterServer) ExecuteTask(w http.ResponseWriter, r *http.Request) {
-	r.ParseForm()
+func (PS *CNCServer) ExecuteTask(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	r.ParseMultipartForm(32 << 20) // 32MB max
 	file, _, ex := r.FormFile("PrintFile")
 	if ex != nil {
-		http.Error(w, ex.Error(), http.StatusBadRequest)
+		http.Error(w, "Failed to get file: "+ex.Error(), http.StatusBadRequest)
+		log.Println("Failed to get file: " + ex.Error())
 		return
 	}
 	defer file.Close()
+
 	fileBytes, ex := io.ReadAll(file)
 	if ex != nil {
-		http.Error(w, ex.Error(), http.StatusBadRequest)
+		http.Error(w, "Failed to read file: "+ex.Error(), http.StatusBadRequest)
+		log.Println("Failed to read file: " + ex.Error())
+		return
 	}
+
 	Key := r.URL.Query().Get("uniqueKey")
-	PS.Manager.ExecuteTask(Key, fileBytes)
+	if Key == "" {
+		http.Error(w, "uniqueKey parameter is required", http.StatusBadRequest)
+		return
+	}
+
+	ex = PS.Manager.ExecuteTask(Key, fileBytes)
+	if ex != nil {
+		http.Error(w, "Failed to execute task: "+ex.Error(), http.StatusBadRequest)
+		log.Println("Failed to execute task: " + ex.Error())
+		return
+	}
+
 	w.Write([]byte("Start printing!"))
 }
 
-func (PS *PrinterServer) UploadFile(w http.ResponseWriter, r *http.Request) {
+func (PS *CNCServer) UploadFile(w http.ResponseWriter, r *http.Request) {
 	r.ParseForm()
 	file, _, ex := r.FormFile("PrintFile")
 	if ex != nil {
@@ -153,7 +190,7 @@ func (PS *PrinterServer) UploadFile(w http.ResponseWriter, r *http.Request) {
 	w.Write([]byte("Start printing!"))
 }
 
-func (PS *PrinterServer) GetPrintersInformation(w http.ResponseWriter, r *http.Request) {
+func (PS *CNCServer) GetPrintersInformation(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.Write([]byte(PS.Manager.GetJson()))
 }
@@ -162,29 +199,18 @@ func mainHandled(w http.ResponseWriter, r *http.Request) {
 	http.ServeFile(w, r, "WEB/Server/files/index.html")
 }
 
-func (PS *PrinterServer) saveSettings(w http.ResponseWriter, r *http.Request) {
+func (PS *CNCServer) saveSettings(w http.ResponseWriter, r *http.Request) {
 
 }
 
-func (PS *PrinterServer) getSettings(w http.ResponseWriter, r *http.Request) {
+func (PS *CNCServer) getSettings(w http.ResponseWriter, r *http.Request) {
 
-}
-
-func startLoger(filePath string) {
-	file, ex := os.OpenFile(filePath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0666)
-	if ex != nil {
-		log.Fatal(ex)
-	}
-	muliWriter := io.MultiWriter(os.Stdout, file)
-	log.SetFlags(log.Ltime | log.Ldate | log.Llongfile)
-	log.SetOutput(muliWriter)
 }
 
 //HTTP ----------------------------------------------------------------------
 
 // WEB SOCKET ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-func (PS *PrinterServer) HandleWS(w http.ResponseWriter, r *http.Request) {
-	log.Println("connecting...")
+func (PS *CNCServer) HandleWS(w http.ResponseWriter, r *http.Request) {
 	upgrader := websocket.Upgrader{CheckOrigin: func(r *http.Request) bool {
 		return true
 	}, EnableCompression: true}
@@ -204,50 +230,264 @@ func (PS *PrinterServer) HandleWS(w http.ResponseWriter, r *http.Request) {
 
 	isClose := make(chan struct{})
 	WebSoc.SetCloseHandler(func(code int, text string) error {
+		PS.Connections--
 		close(isClose)
 		return nil
 	})
-	go PS.WsRead(WebSoc, isClose)
-	go PS.WSWriteData(WebSoc, isClose)
-	go log.Printf("New socket!")
-}
-
-// TextMessage = 1
-// BinaryMessage = 2
-const PingTime = time.Second * 5
-
-func (PS *PrinterServer) WsRead(WS *websocket.Conn, isClose chan struct{}) {
-	ticker := time.NewTicker(PingTime)
-
+	PS.Connections++
+	var mut sync.Mutex
+	//Reader
 	go func() {
+		ticker := time.NewTicker(PingTime)
+
+		go func() {
+			for {
+				select {
+				case <-ticker.C:
+					WebSoc.WriteControl(websocket.PingMessage, []byte("Ping"), time.Now().Add(PingTime))
+					ticker.Reset(time.Second * 5)
+				case <-isClose:
+					return
+				}
+			}
+		}()
 		for {
 			select {
-			case <-ticker.C:
-				WS.WriteControl(websocket.PingMessage, []byte("Ping"), time.Now().Add(PingTime))
-				ticker.Reset(time.Second * 5)
 			case <-isClose:
 				return
+			default:
+				msgType, msg, err := WebSoc.ReadMessage()
+				if err != nil {
+					mut.Lock()
+					WebSoc.WriteMessage(websocket.TextMessage, WEB_Socket_LOG(666, PS.SecondsWork, "error", err.Error()))
+					mut.Unlock()
+				}
+				_ = msgType
+				if msgType == websocket.TextMessage {
+					Responce := PS.ExecuteWSMessage(string(msg), WebSoc)
+					mut.Lock()
+					WebSoc.WriteMessage(websocket.TextMessage, Responce)
+					mut.Unlock()
+				}
 			}
 		}
 	}()
-	for {
-		msgType, msg, err := WS.ReadMessage()
-		ticker.Reset(PingTime)
+
+	go PS.WSWriteData(WebSoc, isClose, &mut)
+}
+
+const PingTime = time.Second * 5
+
+func (PS *CNCServer) WSWriteData(WS *websocket.Conn, isClose chan struct{}, mut *sync.Mutex) {
+	//timer
+	go func() {
+		for {
+			PS.TimerUpdader.WaitNewData()
+			cur := PS.TimerUpdader.GetNowData()
+			select {
+			case <-isClose:
+				return
+			default:
+				mut.Lock()
+				err := WS.WriteMessage(websocket.TextMessage, []byte(cur))
+				if err != nil {
+					log.Println(err)
+				}
+				mut.Unlock()
+			}
+		}
+	}()
+
+	go func() {
+		for {
+			PS.StatusUpdader.WaitNewData()
+			cur := PS.StatusUpdader.GetNowData()
+			select {
+			case <-isClose:
+				return
+			default:
+				mut.Lock()
+				err := WS.WriteMessage(websocket.TextMessage, []byte(cur))
+				mut.Unlock()
+				if err != nil {
+					log.Println(err)
+				}
+			}
+		}
+	}()
+
+	go func() {
+		for {
+			PS.TableUpdader.WaitNewData()
+			cur := PS.TableUpdader.GetNowData()
+			select {
+			case <-isClose:
+				return
+			default:
+				fmt.Printf("TableUpdader: %v\n", cur)
+				mut.Lock()
+				err := WS.WriteMessage(websocket.TextMessage, []byte(cur))
+				mut.Unlock()
+				if err != nil {
+					log.Println(err)
+				}
+			}
+		}
+	}()
+
+	go func() {
+		for {
+			PS.LogsUpdader.WaitNewData()
+			cur := PS.LogsUpdader.GetNowData()
+			log.Println(cur)
+			select {
+			case <-isClose:
+				return
+			default:
+				mut.Lock()
+				err := WS.WriteMessage(websocket.TextMessage, []byte(cur))
+				mut.Unlock()
+				if err != nil {
+					log.Println(err)
+				}
+			}
+		}
+	}()
+
+}
+
+func (PS *CNCServer) ExecuteWSMessage(msg string, WS *websocket.Conn) []byte {
+	var mas WSMessage
+	err := json.Unmarshal([]byte(msg), &mas)
+	if err != nil {
+		log.Println(err)
+	}
+
+	switch mas.Type {
+	case "connect":
+		con := Service.ConnectionData{}
+		json.Unmarshal(mas.Data, &con)
+		err := PS.Manager.Connect(con)
+
 		if err != nil {
-			log.Println(err)
-			return
+			return WEB_Socket_ERROR(mas.ReqId, err.Error())
 		}
-		_ = msgType
-		if msgType == websocket.TextMessage {
-			ParceWSMessage(string(msg))
+		return WEB_Socket_ACK(mas.ReqId, true)
+
+	case "GetMachines":
+		PS.TableUpdader.SetNewData("") //todo костыль
+		// cncsJson += string(bytes)
+		return WEB_Socket_ACK(mas.ReqId, true)
+	case "command":
+		Command := struct {
+			Gcode     string `json:"gcode"`
+			UniqueKey string `json:"uniqueKey"`
+		}{}
+
+		err := json.Unmarshal(mas.Data, &Command)
+		if err != nil {
+			return WEB_Socket_ERROR(mas.ReqId, err.Error())
 		}
+		err = PS.Manager.SendGCode(Command.Gcode, Command.UniqueKey)
+		if err != nil {
+			return WEB_Socket_ERROR(mas.ReqId, err.Error())
+		}
+		return WEB_Socket_ACK(mas.ReqId, true)
+
+	case "executeTask":
+		task := struct {
+			UniqueKey string `json:"uniqueKey"`
+			FileName  string `json:"fileName"`
+			FileData  []byte `json:"fileData"`
+		}{}
+		err := json.Unmarshal(mas.Data, &task)
+		if err != nil {
+			return WEB_Socket_ERROR(mas.ReqId, err.Error())
+		}
+		err = PS.Manager.ExecuteTask(task.UniqueKey, []byte(base64.StdEncoding.EncodeToString([]byte(task.FileData))))
+		if err != nil {
+			return WEB_Socket_ERROR(mas.ReqId, err.Error())
+		}
+		return WEB_Socket_ACK(mas.ReqId, true)
+	}
+
+	return []byte{}
+}
+
+func (PS *CNCServer) UpdateCNCTable() {
+	for {
+		// Send CNC machines data
+		cncsJson := PS.Manager.GetJson()
+		if cncsJson != "" && cncsJson != "[]" {
+			cncsMsg := fmt.Sprintf(`{"type":"printers","data":%s}`, cncsJson)
+			PS.TableUpdader.SetNewData(cncsMsg)
+		}
+		time.Sleep(50 * time.Millisecond)
 	}
 }
 
-func (PS *PrinterServer) WSWriteData(WS *websocket.Conn, isClose chan struct{}) {
+func (PS *CNCServer) UpdateTimer() {
+	for {
+		curTime := PS.SecondsWork
+		days := curTime / 86400
+		curTime %= 86400
+		hours := curTime / 3600
+		curTime %= 3600
+		minutes := curTime / 60
+		curTime %= 60
 
+		dataSec := struct {
+			Uptime            string `json:"uptime"`
+			ActiveConnections int    `json:"activeConnections"`
+		}{Uptime: fmt.Sprintf("%dd %dh %dm", days, hours, minutes),
+			ActiveConnections: int(PS.Connections)}
+		jsonData, _ := json.Marshal(dataSec)
+		resp := WSMessage{
+			Type: "systemInfo",
+			Data: jsonData,
+		}
+		res, _ := json.Marshal(resp)
+		PS.TimerUpdader.SetNewData(string(res))
+		time.Sleep(500 * time.Millisecond)
+	}
 }
 
-func ParceWSMessage(msg string) {
+func (PS *CNCServer) UpdateStatus() {
+	for {
+		// Send status
+		online := 0
+		printing := 0
+		for _, machine := range PS.Manager.CNC_Machines {
+			dto := machine.GetDTO()
+			if dto.Flags.Connected {
+				online++
+				if dto.Flags.ExecutingTask {
+					printing++
+				}
+			}
+		}
 
+		statusMsg := fmt.Sprintf(
+			`{"type":"status","data":{"online":%d,"printing":%d,"offline":%d,"total":%d}}`,
+			online,
+			printing,
+			len(PS.Manager.CNC_Machines)-online,
+			len(PS.Manager.CNC_Machines),
+		)
+		PS.StatusUpdader.SetNewData(statusMsg)
+
+	}
+}
+
+func (PS *CNCServer) UpdateLogs() {
+	id := uint32(1)
+	for {
+		Logs := PS.Manager.GetAllLogs()
+		for _, val := range Logs {
+			js := WEB_Socket_LOG(id, PS.SecondsWork, val.Level, val.Message)
+			id++
+			PS.LogsUpdader.SetNewData(string(js))
+		}
+		time.Sleep(time.Second)
+	}
 }
