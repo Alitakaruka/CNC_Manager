@@ -37,19 +37,19 @@ type CNCCore struct {
 	DTO CNC_DTO
 
 	//Transmitter   *CNCService.Transmitter
-	ReceiveBuffer []byte       `json:"-"`
-	fileBytes     chan int     `json:"-"`
-	Mutex         sync.Mutex   `json:"-"`
-	WatchDog      *time.Timer  `json:"-"`
-	Checker       *time.Ticker `json:"-"`
+	ReceiveBuffer []byte                  `json:"-"`
+	fileBytes     chan int                `json:"-"`
+	Mutex         sync.Mutex              `json:"-"`
+	WatchDog      *CNCService.WatchDog    `json:"-"`
+	Checker       *time.Ticker            `json:"-"`
+	Connection    Connectors.CNCConnector `json:"-"`
 
 	Logs     []CNCService.Log
 	WorkFile []string `json:"-"`
 }
 
 type CNC_DTO struct {
-	Connection Connectors.CNCConnector `json:"-"`
-	Position   struct {
+	Position struct {
 		X float32 `json:"X"`
 		Y float32 `json:"Y"`
 		Z float32 `json:"Z"`
@@ -103,10 +103,6 @@ func (cnc *CNCCore) ExecuteTask(file []byte, ctx context.Context) {
 
 func (cnc *CNCCore) CNCStart() {
 	cnc.ReceiveBuffer = make([]byte, 512)
-	// cnc.Transmitter = CNCService.NewTransmitter()
-	// cnc.Transmitter.SyncBuffers(cnc.DTO.Connection)
-
-	//not required for TCP
 	if !cnc.DTO.Switchable.Timeout {
 		go cnc.StartWatchcDog()
 		go cnc.CheckConnection_Async()
@@ -116,9 +112,11 @@ func (cnc *CNCCore) CNCStart() {
 }
 
 func (cnc *CNCCore) StartWatchcDog() {
-	cnc.WatchDog = time.NewTimer(time.Second * BaseTimeout)
+	cnc.WatchDog = CNCService.NewWatchDog(11, nil)
 
-	<-cnc.WatchDog.C
+	if close := cnc.WatchDog.Wait(); close {
+		return
+	}
 
 	if cnc.isConnected() {
 		cnc.WriteLog("The machine timeot!", CNCService.LogLevelError)
@@ -128,8 +126,8 @@ func (cnc *CNCCore) StartWatchcDog() {
 }
 
 func (cnc *CNCCore) InitDevice() error {
-	reader := CNCService.NewTimeoutReader(cnc.DTO.Connection, time.Second*2)
-	cnc.DTO.Connection.Write([]byte(CNCService.Identification + CNCService.EndOfData))
+	reader := CNCService.NewTimeoutReader(cnc.Connection, time.Second*2)
+	cnc.Connection.Write([]byte(CNCService.Identification + CNCService.EndOfData))
 	res := reader.Read()
 	if res == "" {
 		return errors.New("the device did not respond to the request")
@@ -181,7 +179,7 @@ func (cnc *CNCCore) isExecutingTask() bool {
 
 func (cnc *CNCCore) ReadConnectionAsync() {
 	cnc.ReceiveBuffer = cnc.ReceiveBuffer[:0]
-	reader := bufio.NewReader(cnc.DTO.Connection)
+	reader := bufio.NewReader(cnc.Connection)
 	for cnc.isConnected() {
 		Byte, ex := reader.ReadByte()
 		if ex != nil {
@@ -189,7 +187,11 @@ func (cnc *CNCCore) ReadConnectionAsync() {
 			cnc.WriteLog(ex.Error(), CNCService.LogLevelError)
 		} else {
 			cnc.Mutex.Lock()
-			cnc.WatchDog.Reset(time.Second * BaseTimeout)
+
+			if cnc.WatchDog != nil {
+				cnc.WatchDog.Alive()
+			}
+
 			cnc.ReceiveBuffer = append(cnc.ReceiveBuffer, Byte)
 			cnc.Mutex.Unlock()
 		}
@@ -212,7 +214,7 @@ func (cnc *CNCCore) CheckConnection_Async() {
 func (cnc *CNCCore) LoadFileForWork(file []byte) error {
 	clear(cnc.WorkFile)
 	DataFile := string(file)
-	if cnc.DTO.Connection == nil {
+	if cnc.Connection == nil {
 		return errors.New("device is not connected")
 	}
 	cnc.WorkFile = strings.Split(DataFile, "\n")
@@ -243,30 +245,26 @@ func (cnc *CNCCore) GetNextByteStream(delim byte) ([]byte, bool) {
 }
 
 func (cnc *CNCCore) SendMessage(message []byte) {
-	// cnc.Transmitter.WaitForNonZero()
-	// cnc.Transmitter.Decrement()
 
-	if cnc.DTO.Connection == nil {
+	if cnc.Connection == nil {
 		log.Println("CNC does not connected")
 	}
-	_, ex := cnc.DTO.Connection.Write(message)
+	_, ex := cnc.Connection.Write(message)
 	if ex != nil {
 		cnc.WriteLog(ex.Error(), CNCService.LogLevelError)
 	}
 }
 
 func (cnc *CNCCore) SendCommand(Command []byte) {
-	// cnc.Transmitter.WaitForNonZero()
-	// cnc.Transmitter.Decrement()
 
-	if cnc.DTO.Connection == nil {
+	if cnc.Connection == nil {
 		log.Println("CNC does not connected")
 	}
-	_, ex := cnc.DTO.Connection.Write(Command)
+	_, ex := cnc.Connection.Write(Command)
 	if ex != nil {
 		cnc.WriteLog(ex.Error(), CNCService.LogLevelError)
 	}
-	_, ex = cnc.DTO.Connection.Write([]byte(CNCService.EndOfData))
+	_, ex = cnc.Connection.Write([]byte(CNCService.EndOfData))
 	if ex != nil {
 		cnc.WriteLog(ex.Error(), CNCService.LogLevelError)
 	}
@@ -280,7 +278,7 @@ func (cnc *CNCCore) GetLogs() []CNCService.Log {
 }
 
 func (cnc *CNCCore) Reconnect() (bool, error) {
-	ok, err := cnc.DTO.Connection.Reconnect()
+	ok, err := cnc.Connection.Reconnect()
 	if err != nil {
 		return ok, err
 	}
@@ -301,9 +299,9 @@ func Connect(typeOfConnection string, connectionData string) (AnyCNC, error) {
 			if err != nil {
 				return nil, err
 			}
-			Core.DTO.Connection = Connectors.NewSerialConnector(port, BaudRate)
+			Core.Connection = Connectors.NewSerialConnector(port, BaudRate)
 		} else if len(strs) == 1 {
-			Core.DTO.Connection = Connectors.NewSerialConnector(connectionData, 9600)
+			Core.Connection = Connectors.NewSerialConnector(connectionData, 9600)
 			Core.DTO.ConnectionData = "COM"
 		}
 	case "IP":
@@ -312,11 +310,12 @@ func Connect(typeOfConnection string, connectionData string) (AnyCNC, error) {
 		if len(strs) == 2 {
 			ip = strs[0]
 			port = strs[1]
+
 		} else {
 			ip = strings.TrimSpace(connectionData)
 			port = "8080"
 		}
-		Core.DTO.Connection = Connectors.NewIpConnector(ip, port)
+		Core.Connection = Connectors.NewIpConnector(ip, port)
 		Core.DTO.ConnectionData = "WIFI"
 	case "later":
 
@@ -324,7 +323,7 @@ func Connect(typeOfConnection string, connectionData string) (AnyCNC, error) {
 		return nil, errors.New("undefined type of connection")
 	}
 
-	err := Core.DTO.Connection.Connect()
+	err := Core.Connection.Connect()
 	Core.DTO.ConnectionString = typeOfConnection + ":" + connectionData
 	if err != nil {
 		return nil, err
@@ -341,7 +340,7 @@ func (cnc *CNCCore) UploadFile(filename string, file []byte) {
 			CNCService.EndOfData
 
 	cnc.SendMessage([]byte(strCommandStart))
-	cnc.WatchDog.Stop()
+	// cnc.WatchDog.Close() todo
 	for len(file) != 0 {
 		select {
 		case bytes := <-cnc.fileBytes:
@@ -357,17 +356,20 @@ func (cnc *CNCCore) UploadFile(filename string, file []byte) {
 	}
 	strRes := CNCService.EndOfTransmision + string(CNCService.EndOfData)
 	cnc.SendMessage([]byte(strRes))
-	cnc.WatchDog.Reset(time.Second * BaseTimeout)
+	// cnc.WatchDog.Reset(time.Second * BaseTimeout)
 }
 
 func (cnc *CNCCore) CloseConnection() {
-	if cnc.isConnected() {
-		cnc.Mutex.Lock()
-		cnc.DTO.Connection.Close()
+	cnc.Mutex.Lock()
+	if cnc.DTO.Flags.Connected {
+		cnc.Connection.Close()
 		cnc.DTO.Flags.Connected = false
-		cnc.Mutex.Unlock()
-		// cnc.WatchDog.Stop()
+
+		if cnc.WatchDog != nil {
+			cnc.WatchDog.Close()
+		}
 	}
+	cnc.Mutex.Unlock()
 }
 
 func RegisterCNC(name string, f func() AnyCNC) {

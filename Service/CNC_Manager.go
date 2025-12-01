@@ -158,6 +158,11 @@ type CNC_JSON struct {
 		Length int `json:"length"`
 		Height int `json:"height"`
 	} `json:"immutable"`
+
+	Light struct {
+		HasLight bool `json:"hasLight"`
+		RGBLight bool `json:"rgbLight"`
+	} `json:"light"`
 }
 
 func (CNC_M *CNCManagerr) GetJson() string {
@@ -190,6 +195,9 @@ func (CNC_M *CNCManagerr) GetJson() string {
 
 		CNC.NozzleTemp = 0
 		CNC.BedTemp = 0
+
+		CNC.Light.HasLight = dto.Switchable.Light
+		CNC.Light.RGBLight = dto.Switchable.RGB
 
 		// Try type assertion for FDMPrinterData directly
 		if fdmMachine, ok := machine.(*FDMPrinter.FDMPrinterData); ok {
