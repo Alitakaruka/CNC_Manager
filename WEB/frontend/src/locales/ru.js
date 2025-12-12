@@ -21,7 +21,9 @@ export default {
     profile: 'Профиль',
     logout: 'Выход',
     theme: 'Тема',
-    language: 'Язык'
+    language: 'Язык',
+    yes: 'Да',
+    no: 'Нет'
   },
 
   // Навигация
@@ -35,7 +37,7 @@ export default {
 
   // Header
   header: {
-    title: 'CNC Manager Pro',
+    title: 'CNC Manager',
     connected: 'Подключено',
     disconnected: 'Отключено',
     online: 'Онлайн',
@@ -65,11 +67,23 @@ export default {
       version: 'Версия',
       connection: 'Подключение',
       status: 'Статус',
-      nozzle: 'Шпиндель',
+      nozzle: 'Сопло',
       bed: 'Стол',
       progress: 'Прогресс',
       timeRemaining: 'Осталось времени',
-      reconnect: 'Переподключить'
+      reconnect: 'Переподключить',
+      dimensions: {
+        title: 'Габариты',
+        width: 'Ширина',
+        length: 'Длина',
+        height: 'Высота'
+      },
+      position: {
+        title: 'Позиция',
+        x: 'X',
+        y: 'Y',
+        z: 'Z'
+      },
     },
     controls: {
       printControl: 'Управление задачей',

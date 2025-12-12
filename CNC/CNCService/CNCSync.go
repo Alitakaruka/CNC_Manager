@@ -1,6 +1,7 @@
 package CNCService
 
 import (
+	"fmt"
 	"io"
 	"log"
 	"strconv"
@@ -9,133 +10,48 @@ import (
 	"time"
 )
 
-type CNCBuffer struct {
-	nowValue uint
-	maxValue uint
-	mutex    sync.Mutex
-	cond     *sync.Cond
-}
-
-func (PB *CNCBuffer) GetValueData() uint {
-	return PB.nowValue
-}
-
-func (PB *CNCBuffer) Decrement() {
-	PB.mutex.Lock()
-	PB.nowValue -= 1
-	PB.mutex.Unlock()
-}
-
-func (PB *CNCBuffer) Increment() {
-	PB.mutex.Lock()
-	if PB.nowValue < PB.maxValue {
-		PB.nowValue++
-		PB.cond.Signal()
-	}
-	PB.mutex.Unlock()
-}
-
-func (PB *CNCBuffer) SetBufferSize(value uint) {
-	PB.mutex.Lock()
-	PB.nowValue = value
-	PB.mutex.Unlock()
-}
-
-func (PB *CNCBuffer) SetMaxBufferSize(value uint) {
-	PB.mutex.Lock()
-	PB.maxValue = value
-	PB.mutex.Unlock()
-}
-
-func (PB *CNCBuffer) GetBufferSize() uint {
-	PB.mutex.Lock()
-	for PB.nowValue == 0 {
-		PB.cond.Wait()
-	}
-	value := PB.nowValue
-	PB.mutex.Unlock()
-	return value
-}
-
-func (PB *CNCBuffer) WaitForNonZero() {
-	PB.mutex.Lock()
-	for PB.nowValue == 0 {
-		PB.cond.Wait()
-	}
-	PB.mutex.Unlock()
-}
-
-func NewCNCBuffer() *CNCBuffer {
-	PB := &CNCBuffer{nowValue: 1, maxValue: 1}
-	PB.cond = sync.NewCond(&PB.mutex)
-	return PB
-}
-
 type Transmitter struct {
-	nowValue uint
-	maxValue uint
-	mutex    sync.Mutex
-	cond     *sync.Cond
+	CurrentFreeBytes int
+	MaxBytes         int
+	mutex            sync.Mutex
+	cond             *sync.Cond
+	Commands         []int
 }
 
-func (transmitter *Transmitter) GetValueData() uint {
-	return transmitter.nowValue
+func (T *Transmitter) Trainsmit(bytes int) {
+	T.mutex.Lock()
+	T.CurrentFreeBytes -= bytes
+	T.Commands = append(T.Commands, bytes)
+	T.mutex.Unlock()
 }
 
-func (transmitter *Transmitter) Decrement() {
-	transmitter.mutex.Lock()
-	transmitter.nowValue -= 1
-	transmitter.mutex.Unlock()
-}
-
-func (transmitter *Transmitter) Increment() {
-	transmitter.mutex.Lock()
-	if transmitter.nowValue < transmitter.maxValue {
-		transmitter.nowValue++
-		transmitter.cond.Signal()
+func (T *Transmitter) ACK() {
+	if len(T.Commands) == 0 {
+		fmt.Print("ACK LEN = 0!!!!!!")
+		return
 	}
-	transmitter.mutex.Unlock()
+	// fmt.Printf("T.CurrentFreeBytes: %v\n", T.CurrentFreeBytes)
+	T.mutex.Lock()
+	// fmt.Println("ACK")
+	val := T.Commands[0]
+	T.CurrentFreeBytes += val
+	T.Commands = T.Commands[1:]
+	T.cond.Signal()
+	T.mutex.Unlock()
 }
 
-func (transmitter *Transmitter) SetBufferSize(value uint) {
-	transmitter.mutex.Lock()
-	transmitter.nowValue = value
-	transmitter.mutex.Unlock()
+func (T *Transmitter) SetMaxBytes(MaxBytes int) {
+	T.mutex.Lock()
+	T.MaxBytes = MaxBytes
+	T.CurrentFreeBytes = MaxBytes
+	T.mutex.Unlock()
 }
 
-func (transmitter *Transmitter) SetMaxBufferSize(value uint) {
-	transmitter.mutex.Lock()
-	transmitter.maxValue = value
-	transmitter.mutex.Unlock()
-}
-
-func (transmitter *Transmitter) GetBufferSize() uint {
-	transmitter.mutex.Lock()
-	for transmitter.nowValue == 0 {
-		transmitter.cond.Wait()
-	}
-	value := transmitter.nowValue
-	transmitter.mutex.Unlock()
-	return value
-}
-
-func (transmitter *Transmitter) WaitForNonZero() {
-	transmitter.mutex.Lock()
-	for transmitter.nowValue == 0 {
-		transmitter.cond.Wait()
-	}
-	transmitter.mutex.Unlock()
-}
-
-func NewTransmitter() *Transmitter {
-	transmitter := &Transmitter{nowValue: 1, maxValue: 1}
-	transmitter.cond = sync.NewCond(&transmitter.mutex)
-	return transmitter
-}
-
-func (transmitter *Transmitter) SyncBuffers(Connection io.ReadWriter) {
+func (T *Transmitter) SyncBuffers(Connection io.ReadWriter) {
+	T.mutex.Lock()
+	defer T.mutex.Unlock()
 	reader := NewTimeoutReader(Connection, time.Second*2)
-	Connection.Write([]byte(SYNC))
+	Connection.Write([]byte(SYNC + EndOfData))
 	result := reader.Read()
 	if result == "" {
 		return
@@ -143,18 +59,33 @@ func (transmitter *Transmitter) SyncBuffers(Connection io.ReadWriter) {
 	comands := strings.Split(result, EndOfData)
 
 	for _, val := range comands {
-		if strings.HasPrefix(val, EndOfData) {
-			str, _ := strings.CutPrefix(val, MyMaxBufferSize)
+		if strings.HasPrefix(val, MyBufferLen) {
+			str, _ := strings.CutPrefix(val, MyBufferLen)
 			MaxSize, err := strconv.Atoi(str)
 			if err != nil {
 				log.Println(err)
 			}
-			transmitter.SetMaxBufferSize(uint(MaxSize))
+			T.MaxBytes = MaxSize
 		}
 	}
 	Connection.Write([]byte(ClearBuffer))
 	reader.Read()
-	transmitter.SetBufferSize(transmitter.maxValue)
+	T.CurrentFreeBytes = (T.MaxBytes)
+}
+
+func (transmitter *Transmitter) Wait(bytes int) {
+	transmitter.mutex.Lock()
+	for transmitter.CurrentFreeBytes < bytes {
+		transmitter.cond.Wait()
+	}
+	transmitter.mutex.Unlock()
+}
+
+func NewTransmitter() *Transmitter {
+	transmitter := &Transmitter{MaxBytes: 128, CurrentFreeBytes: 128}
+	transmitter.cond = sync.NewCond(&transmitter.mutex)
+	transmitter.Commands = make([]int, 0)
+	return transmitter
 }
 
 type TimeoutReader struct {
@@ -195,6 +126,7 @@ func (PR *TimeoutReader) ReadBytes() []byte {
 		}
 	}
 }
+
 func (PR *TimeoutReader) Read() string {
 	readBuf := make([]byte, 256)
 	PR.buffer = PR.buffer[:0]

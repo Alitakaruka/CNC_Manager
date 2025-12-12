@@ -6,7 +6,7 @@ import {
   X, 
   User, 
   Palette, 
-  LogOut, 
+  LogOut,
   Home, 
   BarChart3,
   Plus,

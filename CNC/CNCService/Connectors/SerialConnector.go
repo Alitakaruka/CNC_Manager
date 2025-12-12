@@ -42,16 +42,16 @@ func (SC *SerialConnector) GetConnectionString() string {
 	return SC.PortName + ":" + strconv.Itoa(SC.BaudRate)
 }
 
-func (SC *SerialConnector) Reconnect() (bool, error) {
+func (SC *SerialConnector) Reconnect() error {
 	if SC.ReadWriteCloser != nil {
 		SC.Close()
 	}
 
 	ex := SC.Connect()
 	if ex != nil {
-		return false, ex
+		return ex
 	}
-	return true, nil
+	return nil
 }
 
 func (SC *SerialConnector) GetName() string {

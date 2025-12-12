@@ -2,6 +2,7 @@ package Connectors
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"net"
 	"time"
@@ -18,7 +19,8 @@ func NewIpConnector(Adress, port string) *IPConnector {
 }
 
 func (SC *IPConnector) Connect() error {
-	ctx, cancale := context.WithTimeout(context.Background(), time.Second*2)
+	fmt.Println("Ip connector!")
+	ctx, cancale := context.WithTimeout(context.Background(), time.Second*5)
 	defer cancale()
 	dialer := net.Dialer{}
 	adr := SC.Adress + ":" + SC.Port
@@ -27,38 +29,23 @@ func (SC *IPConnector) Connect() error {
 		return err
 	}
 	SC.ReadWriteCloser = conn
-	// URL := url.URL{Scheme: "ws", Host: adr, Path: "/ws"}
-	// WS, _, err := websocket.DefaultDialer.Dial(URL.String(), nil)
-	// if err != nil {
-	// 	return err
-	// }
-	// CNCSock := CNCSocket{Conn: WS}
-	// SC.ReadWriteCloser = &CNCSock
 	return nil
 }
 
 func (SC *IPConnector) GetConnectionString() string {
 	return SC.Adress + ":" + SC.Port
 }
-func (SC *IPConnector) Reconnect() (bool, error) {
+func (SC *IPConnector) Reconnect() error {
 	if SC.ReadWriteCloser != nil {
 		SC.Close()
 	}
-
 	ex := SC.Connect()
 	if ex != nil {
-		return false, ex
+		fmt.Printf("ex: %v\n", ex)
+		return ex
 	}
-	return true, nil
+	return nil
 }
 func (SC *IPConnector) GetName() string {
 	return ""
 }
-
-const (
-	MessageTypeText   = 1
-	MessageTypeBinaty = 2
-	MessageTypeClose  = 8
-	MessageTypePing   = 9
-	MessageTypePong   = 10
-)

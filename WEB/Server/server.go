@@ -29,11 +29,10 @@ type CNCServer struct {
 	TableUpdader  *WSTransmiterr
 	LogsUpdader   *WSTransmiterr
 
-	Manager     Service.CNCManagerr
-	mux         *http.ServeMux
-	port        string
-	Adrr        string
-	PrinterRepo Service.PrinterRepository
+	Manager Service.CNCManagerr
+	mux     *http.ServeMux
+	port    string
+	Adrr    string
 }
 
 func (PS *CNCServer) InitServer(port, addr, sqlPath string) {
@@ -42,7 +41,7 @@ func (PS *CNCServer) InitServer(port, addr, sqlPath string) {
 	PS.Adrr = addr
 
 	Service.InitPrinters()
-	PS.PrinterRepo.InitRepository(sqlPath)
+	PS.Manager.InitManager(sqlPath)
 	PS.mux = http.NewServeMux()
 	//fs := http.FS(ServerFile)
 	//PS.mux.Handle("/", http.FileServer(fs))
@@ -69,10 +68,8 @@ func CatchPanic(context string) {
 }
 
 func (PS *CNCServer) CountTime() {
-	ticker := time.NewTicker(time.Second)
-
 	for {
-		<-ticker.C
+		<-time.After(time.Second)
 		PS.SecondsWork++
 	}
 }
@@ -199,14 +196,6 @@ func mainHandled(w http.ResponseWriter, r *http.Request) {
 	http.ServeFile(w, r, "WEB/Server/files/index.html")
 }
 
-func (PS *CNCServer) saveSettings(w http.ResponseWriter, r *http.Request) {
-
-}
-
-func (PS *CNCServer) getSettings(w http.ResponseWriter, r *http.Request) {
-
-}
-
 //HTTP ----------------------------------------------------------------------
 
 // WEB SOCKET ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
@@ -324,7 +313,7 @@ func (PS *CNCServer) WSWriteData(WS *websocket.Conn, isClose chan struct{}, mut 
 			case <-isClose:
 				return
 			default:
-				fmt.Printf("TableUpdader: %v\n", cur)
+				// fmt.Printf("TableUpdader: %v\n", cur)
 				mut.Lock()
 				err := WS.WriteMessage(websocket.TextMessage, []byte(cur))
 				mut.Unlock()
@@ -339,7 +328,7 @@ func (PS *CNCServer) WSWriteData(WS *websocket.Conn, isClose chan struct{}, mut 
 		for {
 			PS.LogsUpdader.WaitNewData()
 			cur := PS.LogsUpdader.GetNowData()
-			log.Println(cur)
+			// log.Println(cur)
 			select {
 			case <-isClose:
 				return
@@ -373,7 +362,17 @@ func (PS *CNCServer) ExecuteWSMessage(msg string, WS *websocket.Conn) []byte {
 			return WEB_Socket_ERROR(mas.ReqId, err.Error())
 		}
 		return WEB_Socket_ACK(mas.ReqId, true)
-
+	case "reconnect":
+		con := struct {
+			UniqueKey string `json:"uniqueKey"`
+		}{}
+		json.Unmarshal(mas.Data, &con)
+		err := PS.Manager.Reconnect(con.UniqueKey)
+		if err != nil {
+			return WEB_Socket_ERROR(mas.ReqId, err.Error())
+		} else {
+			return WEB_Socket_ACK(mas.ReqId, true)
+		}
 	case "GetMachines":
 		PS.TableUpdader.SetNewData("") //todo костыль
 		// cncsJson += string(bytes)
@@ -484,7 +483,7 @@ func (PS *CNCServer) UpdateLogs() {
 	for {
 		Logs := PS.Manager.GetAllLogs()
 		for _, val := range Logs {
-			js := WEB_Socket_LOG(id, PS.SecondsWork, val.Level, val.Message)
+			js := WEB_Socket_LOG(id, uint32(time.Now().Unix()), val.Level, val.Message)
 			id++
 			PS.LogsUpdader.SetNewData(string(js))
 		}

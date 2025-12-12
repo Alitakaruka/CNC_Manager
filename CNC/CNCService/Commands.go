@@ -1,5 +1,7 @@
 package CNCService
 
+import "strings"
+
 const Identification = "Identification"
 
 // MACHINE TYPES
@@ -12,10 +14,10 @@ const (
 )
 
 var MachinesTypes = map[int]string{
-	FDM_PRINTER: "FDM",
+	FDM_PRINTER: "FDM 3D PRINTER",
 	LASER:       "LASER",
-	SLA_PRINTER: "SLA",
-	SLS_PRINTER: "SLS",
+	SLA_PRINTER: "SLA 3D PRINTER",
+	SLS_PRINTER: "SLS 3D PRINTER",
 	MILLING:     "MILLING",
 }
 
@@ -37,15 +39,14 @@ const (
 )
 
 const (
-	MyTemperatureN      = "N:"          // "N_"
-	MyTemperatureB      = "B:"          // "B_"
-	BufferACK           = "ok"          // "ok"
-	ImPrinting          = "IsPrinting:" // "P_"
-	MyPositionX         = "X:"          // "X_"
-	MyPositionY         = "Y:"          // "Y_"
-	MyPositionZ         = "Z:"          // "Z_"
-	MyBufferCommandSize = "Buf:"        // "S_"
-	MyMaxBufferSize     = "^_"          // "^_"
+	MyTemperatureN = "N:"          // "N_"
+	MyTemperatureB = "B:"          // "B_"
+	BufferACK      = "ok"          // "ok"
+	ImPrinting     = "IsPrinting:" // "P_"
+	MyPositionX    = "X:"          // "X_"
+	MyPositionY    = "Y:"          // "Y_"
+	MyPositionZ    = "Z:"          // "Z_"
+	MyBufferLen    = "M_Buff_Len:"
 
 	Error            = "Error:"    // "E_"
 	MyWidth          = "M_Width:"  // "W_"
@@ -55,10 +56,12 @@ const (
 	MyType           = "M_Type:"   // "T_"
 	DEVICE_CHIP_NAME = "Device_chip_name:"
 
-	SwitchTimeout = "Switch_Timeout:"
+	SwitchTimeout  = "Switch_Timeout:"
+	SwitchHasLight = "HasLight:"
+	SwitchRGBLight = "RGBLight:"
 
 	ConnectionType = "ConnectionType:"
-	SYNC           = "+\r_"
+	SYNC           = "SYNC"
 )
 
 // Immutable
@@ -81,7 +84,15 @@ const (
 	EndOfTransmision   = "F\\4"
 	FILE_NAME          = "FILENAME:"
 	FILE_SIZE          = "SIZE:"
-	GET_FILE_FATA      = "GET_FILE_FATA:%d"
+	GET_FILE_FATA      = "GET_FILE_FATA:"
+	SET_LIGHT          = "SET_LIGHT:"
+	RED                = "RED:"
+	GREEN              = "GREEN:"
+	BLUE               = "BLUE:"
 )
 const PrinterTimeOut = 10
 const InformationUpdateTime = 4
+
+func DeleteComments_GCode(Command string) string {
+	return strings.SplitN(Command, ";", 2)[0]
+}

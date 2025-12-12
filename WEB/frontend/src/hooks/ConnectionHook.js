@@ -49,7 +49,7 @@ async function ensureWsReady(wsClient, timeoutMs = 5000) {
   })
 }
 
-export default async function useConnectPrinter(TypeOfConnection = "", ConnectionData = "") {
+export default async function ConnectCNC(TypeOfConnection = "", ConnectionData = "") {
   console.log("TypeOfConnection:", TypeOfConnection)
   console.log("ConnectionData:", ConnectionData)
   
@@ -76,6 +76,28 @@ export default async function useConnectPrinter(TypeOfConnection = "", Connectio
     await ensureWsReady(wsClient)
 
     const result = await wsClient.request('connect', { TypeOfConnection, ConnectionData })
+    console.log(result)
+
+    return typeof result === 'string' ? result : 'OK'
+  } catch (error) {
+    console.error("WS connection error:", error)
+    throw new Error(error?.message || "Ошибка подключения через WebSocket")
+  }
+}
+
+export async function ReconnectCNC(UniqueKey = "") {
+  console.log("UniqueKey:", UniqueKey)
+
+  if (UniqueKey === ""){
+      throw new Error("Unique key is empty!")
+  }
+
+  // Try WS first
+  try {
+    const { wsClient } = await import('./WebSocketClient')
+    await ensureWsReady(wsClient)
+
+    const result = await wsClient.request('reconnect', {UniqueKey})
     console.log(result)
 
     return typeof result === 'string' ? result : 'OK'

@@ -54,16 +54,10 @@ type WSMessage struct {
 	Data  json.RawMessage `json:"data"`
 }
 
-type jsonWsGcode struct {
-	gcode     string
-	uniqueKey string
-	reqId     string
-}
-
 type WSError struct {
 	Type  string `json:"type"`
 	ReqId string `json:"reqId"`
-	data  struct {
+	Data  struct {
 	} `json:"data"`
 }
 
