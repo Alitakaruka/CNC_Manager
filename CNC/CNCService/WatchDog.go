@@ -35,6 +35,9 @@ func NewWatchDog(Seconds int64, killFunc func()) *WatchDog {
 					wd.WG.Done()
 					killFunc()
 					return
+				} else {
+					wd.WG.Done()
+					return
 				}
 			case <-ctx.Done():
 				wd.WG.Done()
@@ -54,7 +57,7 @@ func NewWatchDog(Seconds int64, killFunc func()) *WatchDog {
 
 func (wd *WatchDog) Wait() bool {
 	wd.WG.Wait()
-	return !wd.isStoped
+	return wd.isStoped
 }
 
 func (wd *WatchDog) Alive() {

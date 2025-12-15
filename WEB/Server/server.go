@@ -3,7 +3,6 @@ package Server
 import (
 	Service "CNCManager/Service"
 	"embed"
-	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -247,9 +246,7 @@ func (PS *CNCServer) HandleWS(w http.ResponseWriter, r *http.Request) {
 			default:
 				msgType, msg, err := WebSoc.ReadMessage()
 				if err != nil {
-					mut.Lock()
-					WebSoc.WriteMessage(websocket.TextMessage, WEB_Socket_LOG(666, PS.SecondsWork, "error", err.Error()))
-					mut.Unlock()
+					return
 				}
 				_ = msgType
 				if msgType == websocket.TextMessage {
@@ -403,7 +400,21 @@ func (PS *CNCServer) ExecuteWSMessage(msg string, WS *websocket.Conn) []byte {
 		if err != nil {
 			return WEB_Socket_ERROR(mas.ReqId, err.Error())
 		}
-		err = PS.Manager.ExecuteTask(task.UniqueKey, []byte(base64.StdEncoding.EncodeToString([]byte(task.FileData))))
+
+		/////////////////////////////
+		// fmt.Printf("task.FileData: %v\n", string(task.FileData))
+		// enc := base64.StdEncoding.EncodeToString(task.FileData)
+
+		// dec, err := base64.StdEncoding.DecodeString(enc)
+		// if err != nil {
+		// 	log.Fatal(err)
+		// }
+
+		////////////////////////////
+
+		// fmt.Printf("task.FileData: %v\n", task.FileData)
+		// fmt.Printf("base64.StdEncoding.EncodeToString((task.FileData)): %v\n", base64.StdEncoding.EncodeToString((task.FileData)))
+		err = PS.Manager.ExecuteTask(task.UniqueKey, (task.FileData))
 		if err != nil {
 			return WEB_Socket_ERROR(mas.ReqId, err.Error())
 		}

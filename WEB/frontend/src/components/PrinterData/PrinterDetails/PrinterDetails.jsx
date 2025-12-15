@@ -7,7 +7,7 @@ import {
   Zap,
   Box,
   Sunset,
-  Wind,
+  Fan,
   Play,
   Pause,
   Square,
@@ -396,7 +396,7 @@ export default function Details({ PrinterData, SetDetailsIsOpen }) {
                           }}
                           className="flex-shrink-0"
                         >
-                          <Wind className="h-4 w-4 text-green-600 dark:text-green-400" />
+                          <Fan className="h-4 w-4 text-green-600 dark:text-green-400" />
                         </motion.div>
                         <span className="text-xs font-medium text-green-800 dark:text-green-300 truncate ml-1 flex-1 text-right">
                           {fanName}

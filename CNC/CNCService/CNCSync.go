@@ -1,7 +1,6 @@
 package CNCService
 
 import (
-	"fmt"
 	"io"
 	"log"
 	"strconv"
@@ -16,6 +15,7 @@ type Transmitter struct {
 	mutex            sync.Mutex
 	cond             *sync.Cond
 	Commands         []int
+	strCommamds      []string //todo DEBUG
 }
 
 func (T *Transmitter) Trainsmit(bytes int) {
@@ -27,7 +27,7 @@ func (T *Transmitter) Trainsmit(bytes int) {
 
 func (T *Transmitter) ACK() {
 	if len(T.Commands) == 0 {
-		fmt.Print("ACK LEN = 0!!!!!!")
+		// fmt.Print("ACK LEN = 0!!!!!!")
 		return
 	}
 	// fmt.Printf("T.CurrentFreeBytes: %v\n", T.CurrentFreeBytes)
@@ -51,14 +51,13 @@ func (T *Transmitter) SyncBuffers(Connection io.ReadWriter) {
 	T.mutex.Lock()
 	defer T.mutex.Unlock()
 	reader := NewTimeoutReader(Connection, time.Second*2)
-	Connection.Write([]byte(SYNC + EndOfData))
+	Connection.Write([]byte(EndOfData + SYNC + EndOfData))
 	result := reader.Read()
 	if result == "" {
 		return
 	}
-	comands := strings.Split(result, EndOfData)
-
-	for _, val := range comands {
+	commands := strings.Split(result, EndOfData)
+	for _, val := range commands {
 		if strings.HasPrefix(val, MyBufferLen) {
 			str, _ := strings.CutPrefix(val, MyBufferLen)
 			MaxSize, err := strconv.Atoi(str)
@@ -66,19 +65,23 @@ func (T *Transmitter) SyncBuffers(Connection io.ReadWriter) {
 				log.Println(err)
 			}
 			T.MaxBytes = MaxSize
+			T.CurrentFreeBytes = MaxSize
 		}
 	}
-	Connection.Write([]byte(ClearBuffer))
-	reader.Read()
-	T.CurrentFreeBytes = (T.MaxBytes)
+	// fmt.Printf("T.MaxBytes: %v\n", T.MaxBytes)
+	// fmt.Printf("T.CurrentFreeBytes: %v\n", T.CurrentFreeBytes)
 }
 
-func (transmitter *Transmitter) Wait(bytes int) {
+func (transmitter *Transmitter) Wait(bytes int) bool {
+	if bytes > transmitter.MaxBytes {
+		return false
+	}
 	transmitter.mutex.Lock()
 	for transmitter.CurrentFreeBytes < bytes {
 		transmitter.cond.Wait()
 	}
 	transmitter.mutex.Unlock()
+	return true
 }
 
 func NewTransmitter() *Transmitter {
@@ -128,7 +131,7 @@ func (PR *TimeoutReader) ReadBytes() []byte {
 }
 
 func (PR *TimeoutReader) Read() string {
-	readBuf := make([]byte, 256)
+	readBuf := make([]byte, 1024)
 	PR.buffer = PR.buffer[:0]
 	for {
 		timer := time.NewTimer(PR.TimeOut)
@@ -137,7 +140,6 @@ func (PR *TimeoutReader) Read() string {
 		if err != nil {
 			return string(PR.buffer)
 		}
-
 		if n > 0 {
 			PR.buffer = append(PR.buffer, readBuf[:n]...)
 			continue

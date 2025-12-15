@@ -2,7 +2,6 @@ package Connectors
 
 import (
 	"context"
-	"fmt"
 	"io"
 	"net"
 	"time"
@@ -19,7 +18,6 @@ func NewIpConnector(Adress, port string) *IPConnector {
 }
 
 func (SC *IPConnector) Connect() error {
-	fmt.Println("Ip connector!")
 	ctx, cancale := context.WithTimeout(context.Background(), time.Second*5)
 	defer cancale()
 	dialer := net.Dialer{}
@@ -41,7 +39,6 @@ func (SC *IPConnector) Reconnect() error {
 	}
 	ex := SC.Connect()
 	if ex != nil {
-		fmt.Printf("ex: %v\n", ex)
 		return ex
 	}
 	return nil

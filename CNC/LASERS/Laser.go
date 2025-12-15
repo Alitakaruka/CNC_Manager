@@ -17,6 +17,10 @@ func InitStandartLaser() {
 	CNC.RegisterCNC("Esp_32_Laser", Mfunck)
 }
 
+func (L *Laser) SetCore(core *CNC.CNCCore) {
+	L.CNCCore = *core
+}
+
 func (L *Laser) InitRealization() error {
 	// FDM.Fans = make(map[int]uint8)
 	return nil

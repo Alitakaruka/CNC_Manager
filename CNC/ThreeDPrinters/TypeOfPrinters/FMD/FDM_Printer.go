@@ -75,18 +75,68 @@ func (FDM *FDMPrinterData) CheckTemps() {
 
 func (P *FDMPrinterData) ExecuteTask(file []byte, ctx context.Context) {
 	P.WriteLog(CNCService.LogLevelInformation, "start printing!")
-	for _, Data := range P.WorkFile {
+	data := strings.Split(string(file), "\n")
+	for _, Data := range data {
 		select {
 		case <-ctx.Done():
 			return
 		default:
 			res := CNCService.DeleteComments_GCode(Data)
+
+			if strings.HasPrefix(res, "M104") || //TODO DEBUG!
+				strings.HasPrefix(res, "M109") ||
+				strings.HasPrefix(res, "M140") ||
+				strings.HasPrefix(res, "M190") {
+				continue // ← пропускаем нагрев
+			}
+
 			if res == "" || res == CNCService.EndOfData {
 				continue
 			}
-			P.SendMessage([]byte(res + CNCService.EndOfData))
+			// fmt.Printf("res: %v\n", res)
+			if ok := P.SendMessage([]byte(res + CNCService.EndOfData)); !ok {
+				P.WriteLog(CNCService.LogLevelError, "Printing aborted! Command cant send!")
+				return
+			}
 		}
 	}
+}
+
+func SkipHeatingCommands(gcode string) string {
+	lines := strings.Split(gcode, "\n")
+	out := make([]string, 0, len(lines))
+
+	for _, line := range lines {
+		l := strings.TrimSpace(line)
+
+		// комментарии пропускаем как есть
+		if strings.HasPrefix(l, ";") || l == "" {
+			out = append(out, line)
+			continue
+		}
+
+		// берём только первую команду (до комментария)
+		cmd := l
+		if i := strings.Index(cmd, ";"); i >= 0 {
+			cmd = cmd[:i]
+		}
+		cmd = strings.ToUpper(strings.TrimSpace(cmd))
+
+		if strings.HasPrefix(cmd, "M104") ||
+			strings.HasPrefix(cmd, "M109") ||
+			strings.HasPrefix(cmd, "M140") ||
+			strings.HasPrefix(cmd, "M190") {
+			continue // ← пропускаем нагрев
+		}
+
+		out = append(out, line)
+	}
+
+	return strings.Join(out, "\n")
+}
+
+func (FDM *FDMPrinterData) SetCore(core *CNC.CNCCore) {
+	FDM.CNCCore = *core
 }
 
 func (FDM *FDMPrinterData) ParseCommand(Prefix, dataStr string) {

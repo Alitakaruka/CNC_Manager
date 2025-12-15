@@ -6,7 +6,6 @@ import (
 	"bufio"
 	"context"
 	"errors"
-	"fmt"
 	"strconv"
 	"strings"
 	"sync"
@@ -23,7 +22,7 @@ type AnyCNC interface {
 	SetDTO(DTO CNC_DTO)
 	Reconnect() error
 	GetLogs() []CNCService.Log
-	SendMessage(message []byte)
+	SendMessage(message []byte) bool
 	InitDevice() error
 	CNCStart()
 	StartTask(file []byte) error
@@ -38,20 +37,21 @@ type RealizeCNC interface {
 	ParseCommand(Prefix, dataStr string)
 	InitRealization() error
 	GetJsonData() any
+	SetCore(core *CNCCore)
 }
 
 type CNCCore struct {
 	DTO CNC_DTO
 
-	Realize        RealizeCNC              `json:"-"`
-	ReceiveBuffer  []byte                  `json:"-"`
-	ReceiveBuffer1 chan byte               `json:"-"`
-	fileBytes      chan int                `json:"-"`
-	Mutex          *sync.RWMutex           `json:"-"`
-	WatchDog       *CNCService.WatchDog    `json:"-"`
-	Checker        *time.Ticker            `json:"-"`
-	Transmitter    *CNCService.Transmitter `json:"-"`
-	Connection     Connectors.CNCConnector `json:"-"`
+	Realize RealizeCNC `json:"-"`
+	// ReceiveBuffer  []byte                  `json:"-"`
+	ReceiveBuffer chan byte               `json:"-"`
+	fileBytes     chan int                `json:"-"`
+	Mutex         *sync.RWMutex           `json:"-"`
+	WatchDog      *CNCService.WatchDog    `json:"-"`
+	Checker       *time.Ticker            `json:"-"`
+	Transmitter   *CNCService.Transmitter `json:"-"`
+	Connection    Connectors.CNCConnector `json:"-"`
 
 	Logs     []CNCService.Log
 	WorkFile []string `json:"-"`
@@ -94,10 +94,10 @@ type CNC_DTO struct {
 }
 
 func (cnc *CNCCore) StartTask(file []byte) error {
-	err := cnc.LoadFileForWork(file)
-	if err != nil {
-		return err
-	}
+	// err := cnc.LoadFileForWork(file)
+	// if err != nil {
+	// 	return err
+	// }
 	cntx, cancel := context.WithCancel(context.Background())
 	go func() {
 		cnc.Mutex.Lock()
@@ -105,6 +105,7 @@ func (cnc *CNCCore) StartTask(file []byte) error {
 		dto.Flags.ExecutingTask = true
 		cnc.SetDTO(dto)
 		cnc.Mutex.Unlock()
+
 		cnc.Realize.ExecuteTask(file, cntx)
 
 		if cnc.CanExecuteTask() {
@@ -117,6 +118,7 @@ func (cnc *CNCCore) StartTask(file []byte) error {
 		cnc.SetDTO(dto)
 		cnc.Mutex.Unlock()
 	}()
+	time.Sleep(time.Millisecond * 10) //stub
 	go func() {
 		for cnc.CanExecuteTask() {
 			time.Sleep(time.Millisecond * 100)
@@ -131,11 +133,7 @@ func (cnc *CNCCore) StartTask(file []byte) error {
 
 func (cnc *CNCCore) CNCStart() {
 	cnc.Transmitter.SyncBuffers(cnc.Connection)
-	fmt.Printf("cnc.Transmitter.MaxBytes: %v\n", cnc.Transmitter.MaxBytes)
-	fmt.Printf("cnc.Transmitter.CurrentFreeBytes: %v\n", cnc.Transmitter.CurrentFreeBytes)
-
-	cnc.ReceiveBuffer = make([]byte, 512)
-	cnc.ReceiveBuffer1 = make(chan byte, 1024)
+	cnc.ReceiveBuffer = make(chan byte, 1024)
 	if !cnc.DTO.Switchable.Timeout {
 		go cnc.StartWatchcDog()
 		go cnc.CheckConnection_Async()
@@ -149,19 +147,15 @@ func (cnc *CNCCore) readResponces() {
 	for cnc.isConnected() {
 		if Command := cnc.getNextByteStream(); Command != nil {
 			cnc.parseCommand(string(Command))
-		} else {
-			time.Sleep(time.Millisecond * 10)
 		}
 	}
 }
 
 func (cnc *CNCCore) StartWatchcDog() {
 	cnc.WatchDog = CNCService.NewWatchDog(11, nil)
-
 	if close := cnc.WatchDog.Wait(); close {
 		return
 	}
-
 	if cnc.isConnected() {
 		cnc.WriteLog(CNCService.LogLevelError, "The machine timeot!")
 		cnc.CloseConnection()
@@ -171,28 +165,30 @@ func (cnc *CNCCore) StartWatchcDog() {
 
 func (cnc *CNCCore) InitDevice() error {
 	cnc.Transmitter = CNCService.NewTransmitter()
-	cnc.Transmitter.SyncBuffers(cnc.Connection)
 
-	reader := CNCService.NewTimeoutReader(cnc.Connection, time.Second*4)
+	reader := CNCService.NewTimeoutReader(cnc.Connection, time.Second*2)
 	cnc.SendMessage([]byte(CNCService.Identification + CNCService.EndOfData))
 	res := reader.Read()
 	if res == "" {
+		cnc.Connection.Close()
 		return errors.New("the device did not respond to the request")
 	}
 	commands := strings.Split(res, CNCService.EndOfData)
-
+	// fmt.Printf("commands: %v\n", commands)
 	for _, comm := range commands {
 		cnc.parseCommand(comm)
 	}
 
 	if cnc.DTO.TARGET_MACHINE_NAME == "" || cnc.DTO.MACHINE_TYPE == 0 {
+		cnc.Connection.Close()
 		return errors.New("the device did not respond as expected")
 	}
 
 	if targer, ok := Machines[cnc.DTO.Device_Chip_Name]; !ok {
-		cnc.CloseConnection()
+		cnc.Connection.Close()
 		return errors.New("the device dint register")
 	} else {
+		targer.SetCore(cnc)
 		cnc.Realize = targer
 		cnc.DTO.Flags.Connected = true
 		return cnc.Realize.InitRealization()
@@ -221,7 +217,7 @@ func (cnc *CNCCore) CanExecuteTask() bool {
 }
 
 func (cnc *CNCCore) readConnectionAsync() {
-	cnc.ReceiveBuffer = cnc.ReceiveBuffer[:0]
+	// cnc.ReceiveBuffer = cnc.ReceiveBuffer[:0]
 	reader := bufio.NewReader(cnc.Connection)
 	for cnc.isConnected() {
 		Byte, ex := reader.ReadByte()
@@ -233,8 +229,8 @@ func (cnc *CNCCore) readConnectionAsync() {
 			if cnc.WatchDog != nil {
 				cnc.WatchDog.Alive()
 			}
-			cnc.ReceiveBuffer1 <- Byte
-			cnc.ReceiveBuffer = append(cnc.ReceiveBuffer, Byte)
+			cnc.ReceiveBuffer <- Byte
+			// cnc.ReceiveBuffer = append(cnc.ReceiveBuffer, Byte)
 			cnc.Mutex.Unlock()
 		}
 	}
@@ -245,6 +241,9 @@ func (cnc *CNCCore) CheckConnection_Async() {
 	defer Checker.Stop()
 
 	for range Checker.C {
+		if cnc.DTO.Flags.ExecutingTask {
+			continue
+		}
 		if !cnc.isConnected() {
 			return
 		}
@@ -274,30 +273,45 @@ func (cnc *CNCCore) GetCore() *CNCCore {
 	return cnc
 }
 func (cnc *CNCCore) getNextByteStream() []byte {
-	cnc.Mutex.RLock()
-	ind := strings.Index(string(cnc.ReceiveBuffer), CNCService.EndOfData)
-	if ind == -1 {
-		// fmt.Println("index -1")
-		cnc.Mutex.RUnlock()
-		return nil
+	result := make([]byte, 0)
+	// cnc.Mutex.RLock()
+
+	for Data := range cnc.ReceiveBuffer {
+		// cnc/ReceiveBuffer
+		result = append(result, Data)
+		if strings.HasSuffix(string(result), CNCService.EndOfData) {
+			return result
+		}
 	}
-	Command := cnc.ReceiveBuffer[:ind]
-	// fmt.Printf("Command: %v\n", Command)
-	cnc.Mutex.RUnlock()
-	cnc.Mutex.Lock()
-	cnc.ReceiveBuffer = cnc.ReceiveBuffer[ind+len([]rune(CNCService.EndOfData)):]
-	// fmt.Printf("cnc.ReceiveBuffer: %v\n", cnc.ReceiveBuffer)
-	cnc.Mutex.Unlock()
-	return Command
+	return result
+	// ind := strings.Index(string(cnc.ReceiveBuffer), CNCService.EndOfData)
+	// if ind == -1 {
+	// 	// fmt.Println("index -1")
+	// 	cnc.Mutex.RUnlock()
+	// 	return nil
+	// }
+	// Command := cnc.ReceiveBuffer[:ind]
+	// // fmt.Printf("Command: %v\n", Command)
+	// cnc.Mutex.RUnlock()
+	// cnc.Mutex.Lock()
+	// cnc.ReceiveBuffer = cnc.ReceiveBuffer[ind+len([]rune(CNCService.EndOfData)):]
+	// // fmt.Printf("cnc.ReceiveBuffer: %v\n", cnc.ReceiveBuffer)
+	// cnc.Mutex.Unlock()
+	// return Command
 }
 
-func (cnc *CNCCore) SendMessage(message []byte) {
-
-	cnc.Transmitter.Wait(len(message))
-	cnc.Transmitter.Trainsmit(len(message))
-	_, ex := cnc.Connection.Write(message)
-	if ex != nil {
-		cnc.WriteLog(CNCService.LogLevelError, ex.Error())
+func (cnc *CNCCore) SendMessage(message []byte) bool {
+	if cnc.Transmitter.Wait(len(message)) {
+		cnc.Transmitter.Trainsmit(len(message))
+		_, ex := cnc.Connection.Write(message)
+		if ex != nil {
+			cnc.WriteLog(CNCService.LogLevelError, ex.Error())
+			return false
+		}
+		return true
+	} else {
+		cnc.WriteLog(CNCService.LogLevelWarning, "Device command size too large!The command will be ignored!")
+		return false
 	}
 }
 

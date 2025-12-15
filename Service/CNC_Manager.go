@@ -8,6 +8,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"log"
 	"strings"
 )
@@ -34,8 +35,11 @@ func (CNC_M *CNCManagerr) InitManager(sqlPath string) {
 					log.Println(err)
 					return
 				}
-				machine.InitDevice()
-
+				err = machine.InitDevice()
+				if err != nil {
+					log.Println(err)
+					return
+				}
 				machine.CNCStart()
 			}()
 
@@ -141,8 +145,12 @@ func (CNC_M *CNCManagerr) reconect(index int) error {
 	if err != nil {
 		return err
 	}
-	CNC.InitDevice()
+	err = CNC.InitDevice()
+	if err != nil {
+		return err
+	}
 	CNC.CNCStart()
+
 	return nil
 }
 
@@ -251,6 +259,7 @@ func (CNC_M *CNCManagerr) GetAllLogs() []CNCService.Log {
 func (CNC_M *CNCManagerr) SendGCode(GCode, Key string) error {
 	Commands := strings.Split(GCode, "\n")
 	for _, val := range Commands {
+		fmt.Printf("val: %v\n", val)
 		if ind, find := CNC_M.findByKey(Key); find {
 			go CNC_M.CNC_Machines[ind].SendMessage([]byte(val + CNCService.EndOfData))
 			return nil
