@@ -21,7 +21,9 @@ export default {
     profile: 'Profile',
     logout: 'Logout',
     theme: 'Theme',
-    language: 'Language'
+    language: 'Language',
+    yes: 'Yes',
+    no: 'No'
   },
 
   // Navigation
@@ -35,7 +37,7 @@ export default {
 
   // Header
   header: {
-    title: 'CNC Manager Pro',
+    title: 'CNC Manager',
     connected: 'Connected',
     disconnected: 'Disconnected',
     online: 'Online',
@@ -65,11 +67,23 @@ export default {
       version: 'Version',
       connection: 'Connection',
       status: 'Status',
-      nozzle: 'Spindle',
+      nozzle: 'Nozzle',
       bed: 'Table',
       progress: 'Progress',
       timeRemaining: 'Time Remaining',
-      reconnect: 'Reconnect'
+      reconnect: 'Reconnect',
+      dimensions: {
+        title: 'Dimensions',
+        width: 'Width',
+        length: 'Length',
+        height: 'Height'
+      },
+      position: {
+        title: 'Position',
+        x: 'X',
+        y: 'Y',
+        z: 'Z'
+      },
     },
     controls: {
       printControl: 'Job Control',

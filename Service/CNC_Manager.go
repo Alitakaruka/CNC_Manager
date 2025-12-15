@@ -3,17 +3,14 @@ package Service
 import (
 	"CNCManager/CNC"
 	CNCService "CNCManager/CNC/CNCService"
-	FDMPrinter "CNCManager/CNC/ThreeDPrinters/TypeOfPrinters/FMD"
-	"context"
+	"CNCManager/Service/DataBase"
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"log"
-	"reflect"
 	"strings"
-	"time"
 )
 
 type ConnectionData struct {
@@ -23,6 +20,34 @@ type ConnectionData struct {
 
 type CNCManagerr struct {
 	CNC_Machines []CNC.AnyCNC
+	DataBase     DataBase.PrinterRepository
+}
+
+func (CNC_M *CNCManagerr) InitManager(sqlPath string) {
+	CNC_M.DataBase.InitRepository(sqlPath)
+	machines := CNC_M.DataBase.GetAllMachines()
+	for _, machine := range machines {
+		machine.Connection = CNC.GetConnector(machine.DTO.ConnectionData, machine.DTO.ConnectionString)
+		if machine.Connection != nil {
+			go func() {
+				err := machine.Reconnect()
+				if err != nil {
+					log.Println(err)
+					return
+				}
+				err = machine.InitDevice()
+				if err != nil {
+					log.Println(err)
+					return
+				}
+				machine.CNCStart()
+			}()
+
+		} else {
+			machine.WriteLog(CNCService.LogLevelWarning, "Failed to connect to the machine")
+		}
+		CNC_M.CNC_Machines = append(CNC_M.CNC_Machines, &machine)
+	}
 }
 
 func (CNC_M *CNCManagerr) Connect(conData ConnectionData) error {
@@ -38,18 +63,11 @@ func (CNC_M *CNCManagerr) Connect(conData ConnectionData) error {
 			return ex
 		}
 
-		var targer CNC.AnyCNC
-		var ok bool
 		err := newCNC.InitDevice()
+
 		if err != nil {
 			newCNC.CloseConnection()
 			return err
-		}
-
-		log.Println("CHIP:" + newCNC.GetDTO().Device_Chip_Name)
-		if targer, ok = CNC.Machines[newCNC.GetDTO().Device_Chip_Name]; !ok {
-			newCNC.CloseConnection()
-			return errors.New("the device has not register")
 		}
 
 		// Get DTO and set unique key if not set
@@ -57,14 +75,29 @@ func (CNC_M *CNCManagerr) Connect(conData ConnectionData) error {
 		if dto.UniqueKey == "" {
 			dto.UniqueKey = CNC_M.GenerateUniqueKey()
 		}
-		targer.SetDTO(dto)
+		newCNC.SetDTO(dto)
+		CNC_M.CNC_Machines = append(CNC_M.CNC_Machines, newCNC)
+		// CNC_M.DataBase.AddMachine(newCNC.GetCore())
 
-		CNC_M.CNC_Machines = append(CNC_M.CNC_Machines, targer)
-
-		targer.CNCStart()
+		newCNC.CNCStart()
 		return nil
 	}
 }
+
+// func copyCommonFields(src, dst any) {
+// 	s := reflect.ValueOf(src).Elem()
+// 	d := reflect.ValueOf(dst).Elem()
+
+// 	for i := 0; i < s.NumField(); i++ {
+// 		f := s.Type().Field(i)
+// 		sv := s.Field(i)
+
+// 		dv := d.FieldByName(f.Name)
+// 		if dv.IsValid() && dv.Type() == sv.Type() && dv.CanSet() {
+// 			dv.Set(sv)
+// 		}
+// 	}
+// }
 
 func (CNC_M *CNCManagerr) IsConnected(index int) bool {
 	DTO := CNC_M.CNC_Machines[index].GetDTO()
@@ -99,23 +132,7 @@ func (CNC_M *CNCManagerr) ExecuteTask(key string, byteFile []byte) error {
 		if err != nil {
 			return err
 		}
-		cntx, cancel := context.WithCancel(context.Background())
-		go func() {
-			dto := cnc.GetDTO()
-			dto.Flags.ExecutingTask = true
-			cnc.SetDTO(dto)
 
-			fmt.Printf("cnc: %v\n", cnc.GetDTO())
-			cnc.ExecuteTask(byteFile, cntx)
-			dto.Flags.ExecutingTask = false
-			cnc.SetDTO(dto)
-		}()
-		go func() {
-			for cnc.CanExecuteTask() {
-				time.Sleep(time.Millisecond * 100)
-			}
-			cancel()
-		}()
 	} else {
 		return errors.New("cnc not found")
 	}
@@ -124,29 +141,40 @@ func (CNC_M *CNCManagerr) ExecuteTask(key string, byteFile []byte) error {
 
 func (CNC_M *CNCManagerr) reconect(index int) error {
 	CNC := CNC_M.CNC_Machines[index]
-	_, err := CNC.Reconnect()
+	err := CNC.Reconnect()
 	if err != nil {
 		return err
 	}
-	CNC.InitDevice()
+	err = CNC.InitDevice()
+	if err != nil {
+		return err
+	}
 	CNC.CNCStart()
+
 	return nil
 }
 
+func (CNC_M *CNCManagerr) Reconnect(uniqueKey string) error {
+	if ind, ok := CNC_M.findByKey(uniqueKey); ok {
+		return CNC_M.reconect(ind)
+	}
+	return errors.New("the device not found")
+}
+
 type CNC_JSON struct {
-	CNC_Name         string `json:"CNCName"`
-	Version          string `json:"version"`
+	CNC_Name string `json:"CNCName"`
+	// Version          string `json:"version"`
 	CncType          string `json:"CncType"`
 	UniqueKey        string `json:"uniqueKey"`
 	IsWorking        bool   `json:"isWorking"`
 	ExecutingTask    bool   `json:"executingTask"`
-	NozzleTemp       int    `json:"nozzleTemp"`
-	BedTemp          int    `json:"bedTemp"`
 	TypeOfConnection string `json:"typeOfConnection"`
 	Progress         int    `json:"progress"`
 	TimeRemaining    int    `json:"timeRemaining"`
 	FileStorage      bool   `json:"fileStorage"`
 	StorageFilesFMT  string `json:"storageFilesFMT"`
+
+	TDP any `json:"TDP"` //Specifical device data
 
 	Position struct {
 		X float32 `json:"X"`
@@ -158,6 +186,11 @@ type CNC_JSON struct {
 		Length int `json:"length"`
 		Height int `json:"height"`
 	} `json:"immutable"`
+
+	Light struct {
+		HasLight bool `json:"hasLight"`
+		RGBLight bool `json:"rgbLight"`
+	} `json:"light"`
 }
 
 func (CNC_M *CNCManagerr) GetJson() string {
@@ -165,10 +198,9 @@ func (CNC_M *CNCManagerr) GetJson() string {
 
 	for _, machine := range CNC_M.CNC_Machines {
 		dto := machine.GetDTO()
-		// log.Println(dto)
 		CNC := CNC_JSON{
-			CNC_Name:         dto.TARGET_MACHINE_NAME,
-			Version:          dto.FIRMWARE_VERSION,
+			CNC_Name: dto.TARGET_MACHINE_NAME,
+			// Version:          dto.FIRMWARE_VERSION,
 			CncType:          getMachineTypeName(dto.MACHINE_TYPE),
 			UniqueKey:        dto.UniqueKey,
 			IsWorking:        dto.Flags.Connected,
@@ -188,22 +220,14 @@ func (CNC_M *CNCManagerr) GetJson() string {
 		CNC.Immutable.Length = dto.Immutable.Length
 		CNC.Immutable.Height = dto.Immutable.Height
 
-		CNC.NozzleTemp = 0
-		CNC.BedTemp = 0
-
-		// Try type assertion for FDMPrinterData directly
-		if fdmMachine, ok := machine.(*FDMPrinter.FDMPrinterData); ok {
-			CNC.NozzleTemp = fdmMachine.ExtruderTemp
-			CNC.BedTemp = fdmMachine.TempBed
-		} else {
-			// Try to access via reflection for embedded structs
-			// This will work for AtmegaPrinter which embeds FDMPrinterData
-			tempData := getFDMData(machine)
-			if tempData != nil {
-				CNC.NozzleTemp = tempData.ExtruderTemp
-				CNC.BedTemp = tempData.TempBed
-			}
+		// CNC.TDP.NozzleTemp = "0 / 0"
+		// CNC.TDP.BedTemp = "0 / 0"
+		if realize := machine.GetCore().Realize; realize != nil {
+			CNC.TDP = machine.GetCore().Realize.GetJsonData()
 		}
+
+		CNC.Light.HasLight = dto.Switchable.Light
+		CNC.Light.RGBLight = dto.Switchable.RGB
 
 		CNCs = append(CNCs, CNC)
 	}
@@ -223,35 +247,6 @@ func getMachineTypeName(machineType int) string {
 	return "Unknown"
 }
 
-// Helper function to extract FDM data using reflection
-// This handles both direct FDMPrinterData and embedded (like AtmegaPrinter)
-func getFDMData(machine CNC.AnyCNC) *FDMPrinter.FDMPrinterData {
-	// Direct type assertion
-	if fdm, ok := machine.(*FDMPrinter.FDMPrinterData); ok {
-		return fdm
-	}
-
-	// Use reflection to access embedded FDMPrinterData
-	v := reflect.ValueOf(machine)
-	if v.Kind() == reflect.Ptr {
-		v = v.Elem()
-	}
-
-	// Try to find FDMPrinterData field (embedded)
-	fdmField := v.FieldByName("FDMPrinterData")
-	if fdmField.IsValid() {
-		// Get pointer to the field to avoid copying mutex
-		if fdmField.CanAddr() {
-			fdmPtr := fdmField.Addr().Interface()
-			if fdm, ok := fdmPtr.(*FDMPrinter.FDMPrinterData); ok {
-				return fdm
-			}
-		}
-	}
-
-	return nil
-}
-
 func (CNC_M *CNCManagerr) GetAllLogs() []CNCService.Log {
 	result := make([]CNCService.Log, 0)
 	for _, CNC := range CNC_M.CNC_Machines {
@@ -264,8 +259,9 @@ func (CNC_M *CNCManagerr) GetAllLogs() []CNCService.Log {
 func (CNC_M *CNCManagerr) SendGCode(GCode, Key string) error {
 	Commands := strings.Split(GCode, "\n")
 	for _, val := range Commands {
+		fmt.Printf("val: %v\n", val)
 		if ind, find := CNC_M.findByKey(Key); find {
-			go CNC_M.CNC_Machines[ind].SendMessage([]byte(val))
+			go CNC_M.CNC_Machines[ind].SendMessage([]byte(val + CNCService.EndOfData))
 			return nil
 		}
 	}
@@ -303,11 +299,12 @@ func GenerateRandomKey() string {
 	return hex.EncodeToString(bytes)
 }
 
-func (CNC_M *CNCManagerr) UploadFile(key, filename string, file []byte) {
+func (CNC_M *CNCManagerr) UploadFile(key, filename string, file []byte) error {
 	index, ok := CNC_M.findByKey(key)
-
 	if !ok {
-		return
+		return errors.New("the device doesnt find")
 	}
 	CNC_M.CNC_Machines[index].UploadFile(filename, file)
+
+	return nil
 }

@@ -6,6 +6,7 @@ const (
 	LogLevelError       = "error"
 	LogLevelWarning     = "warning"
 	LogLevelInformation = "info"
+	LogLevelSuccess     = "success"
 )
 
 type Log struct {
