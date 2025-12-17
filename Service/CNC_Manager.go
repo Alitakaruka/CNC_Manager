@@ -58,10 +58,12 @@ func (CNC_M *CNCManagerr) Connect(conData ConnectionData) error {
 			return CNC_M.reconect(index)
 		}
 	} else {
+		log.Printf("Connection data: %v\n", conData)
 		newCNC, ex := CNC.Connect(conData.TypeOfConnection, conData.ConnectionData)
 		if ex != nil {
 			return ex
 		}
+		log.Println("cnc init good!")
 
 		err := newCNC.InitDevice()
 
