@@ -2,7 +2,6 @@ package laser
 
 import (
 	"CNCManager/CNC"
-	"CNCManager/CNC/CNCService"
 	"context"
 )
 
@@ -32,22 +31,22 @@ func (L *Laser) GetJsonData() any {
 }
 
 func (L *Laser) ExecuteTask(file []byte, ctx context.Context) {
-	L.WriteLog(CNCService.LogLevelInformation, "start printing!")
-	for _, Data := range L.WorkFile {
-		select {
-		case <-ctx.Done():
-			return
-		default:
-			if Data == "" {
-				continue
-			}
-			res := CNCService.DeleteComments_GCode(Data) //:= (FDMPrinter.Prepare_Command_to_printer(Data)) //todo
-			if res == "" || res == CNCService.EndOfData {
-				continue
-			}
-			L.SendMessage([]byte(res))
-		}
-	}
+	// L.WriteLog(CNCService.LogLevelInformation, "start printing!")
+	// for _, Data := range L.WorkFile {
+	// 	select {
+	// 	case <-ctx.Done():
+	// 		return
+	// 	default:
+	// 		if Data == "" {
+	// 			continue
+	// 		}
+	// 		res := CNCService.DeleteComments_GCode(Data) //:= (FDMPrinter.Prepare_Command_to_printer(Data)) //todo
+	// 		if res == "" || res == CNCService.EndOfData {
+	// 			continue
+	// 		}
+	// 		L.SendMessage([]byte(res))
+	// 	}
+	// }
 }
 
 func (L *Laser) ParseCommand(Prefix, dataStr string) {

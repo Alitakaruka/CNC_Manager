@@ -125,8 +125,8 @@ func (PR *PrinterRepository) FindMachine(CNC *CNC.CNCCore) bool {
 	return true
 }
 
-func (PR *PrinterRepository) GetAllMachines() []CNC.CNCCore {
-	var result = make([]CNC.CNCCore, 0)
+func (PR *PrinterRepository) GetAllMachines() []*CNC.CNCCore {
+	var result = make([]*CNC.CNCCore, 0)
 
 	if PR.Db == nil {
 		return result
@@ -180,13 +180,13 @@ func (PR *PrinterRepository) GetAllMachines() []CNC.CNCCore {
 		core.DTO.ConnectionData = Scan.ConnectionData
 		core.DTO.Device_Chip_Name = Scan.Device_Chip_Name
 
-		result = append(result, core)
+		result = append(result, &core)
 	}
 	return result
 }
 
 // TODO
-func (PR *PrinterRepository) DeletePrinter(CNC CNC.AnyCNC) error {
+func (PR *PrinterRepository) DeletePrinter(CNC *CNC.CNCCore) error {
 	if PR.Db == nil {
 		return errors.New("")
 	}

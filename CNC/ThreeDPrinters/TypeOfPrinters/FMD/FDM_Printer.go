@@ -18,7 +18,7 @@ const (
 )
 
 type FDMPrinterData struct {
-	CNC.CNCCore
+	Core *CNC.CNCCore
 
 	Extruder1 struct {
 		CurTemp  int
@@ -36,7 +36,16 @@ type FDMPrinterData struct {
 	Fans map[int]uint8
 }
 
+func (FDM *FDMPrinterData) SetCore(core *CNC.CNCCore) {
+	FDM.Core = core
+}
+
+// func (FDM *FDMPrinterData) GetCore() *CNC.CNCCore {
+// 	return FDM.Core
+// }
+
 func (FDM *FDMPrinterData) InitRealization() error {
+	FDM.Core.WriteLog(CNCService.LogLevelInformation, "Init!")
 	FDM.Fans = make(map[int]uint8)
 	return nil
 }
@@ -74,8 +83,10 @@ func (FDM *FDMPrinterData) CheckTemps() {
 }
 
 func (P *FDMPrinterData) ExecuteTask(file []byte, ctx context.Context) {
-	P.WriteLog(CNCService.LogLevelInformation, "start printing!")
+	P.Core.WriteLog(CNCService.LogLevelInformation, "start printing!")
 	data := strings.Split(string(file), "\n")
+	MaxCommands := len(data)
+	CurrentCommands := 0
 	for _, Data := range data {
 		select {
 		case <-ctx.Done():
@@ -94,10 +105,12 @@ func (P *FDMPrinterData) ExecuteTask(file []byte, ctx context.Context) {
 				continue
 			}
 			// fmt.Printf("res: %v\n", res)
-			if ok := P.SendMessage([]byte(res + CNCService.EndOfData)); !ok {
-				P.WriteLog(CNCService.LogLevelError, "Printing aborted! Command cant send!")
+			if ok := P.Core.SendMessage([]byte(res + CNCService.EndOfData)); !ok {
+				P.Core.WriteLog(CNCService.LogLevelError, "Printing aborted! Command cant send!")
 				return
 			}
+			CurrentCommands++
+			P.Core.Progress = (CurrentCommands / MaxCommands) * 100
 		}
 	}
 }
@@ -126,17 +139,13 @@ func SkipHeatingCommands(gcode string) string {
 			strings.HasPrefix(cmd, "M109") ||
 			strings.HasPrefix(cmd, "M140") ||
 			strings.HasPrefix(cmd, "M190") {
-			continue // ← пропускаем нагрев
+			continue // ← пропускаем нагрев 7043
 		}
 
 		out = append(out, line)
 	}
 
 	return strings.Join(out, "\n")
-}
-
-func (FDM *FDMPrinterData) SetCore(core *CNC.CNCCore) {
-	FDM.CNCCore = *core
 }
 
 func (FDM *FDMPrinterData) ParseCommand(Prefix, dataStr string) {
@@ -169,7 +178,7 @@ func (FDM *FDMPrinterData) ParseCommand(Prefix, dataStr string) {
 		_, err := fmt.Sscanf(Prefix+dataStr, FanSpeed, &index, &value)
 		if err != nil {
 			log.Println(err)
-			FDM.WriteLog(CNCService.LogLevelError, err.Error())
+			FDM.Core.WriteLog(CNCService.LogLevelError, err.Error())
 		}
 		if FDM.Fans != nil {
 			FDM.Fans[index] = uint8(value)

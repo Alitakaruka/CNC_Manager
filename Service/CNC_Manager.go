@@ -19,7 +19,7 @@ type ConnectionData struct {
 }
 
 type CNCManagerr struct {
-	CNC_Machines []CNC.AnyCNC
+	CNC_Machines []*CNC.CNCCore
 	DataBase     DataBase.PrinterRepository
 }
 
@@ -46,7 +46,7 @@ func (CNC_M *CNCManagerr) InitManager(sqlPath string) {
 		} else {
 			machine.WriteLog(CNCService.LogLevelWarning, "Failed to connect to the machine")
 		}
-		CNC_M.CNC_Machines = append(CNC_M.CNC_Machines, &machine)
+		// CNC_M.CNC_Machines = append(CNC_M.CNC_Machines, &machine)
 	}
 }
 
@@ -58,12 +58,10 @@ func (CNC_M *CNCManagerr) Connect(conData ConnectionData) error {
 			return CNC_M.reconect(index)
 		}
 	} else {
-		log.Printf("Connection data: %v\n", conData)
 		newCNC, ex := CNC.Connect(conData.TypeOfConnection, conData.ConnectionData)
 		if ex != nil {
 			return ex
 		}
-		log.Println("cnc init good!")
 
 		err := newCNC.InitDevice()
 
@@ -210,7 +208,7 @@ func (CNC_M *CNCManagerr) GetJson() string {
 			TypeOfConnection: dto.ConnectionData,
 			FileStorage:      dto.Memory.FileStorage,
 			StorageFilesFMT:  dto.Memory.FileStorageFMT,
-			Progress:         0,
+			Progress:         machine.Progress,
 			TimeRemaining:    0,
 		}
 
@@ -224,8 +222,8 @@ func (CNC_M *CNCManagerr) GetJson() string {
 
 		// CNC.TDP.NozzleTemp = "0 / 0"
 		// CNC.TDP.BedTemp = "0 / 0"
-		if realize := machine.GetCore().Realize; realize != nil {
-			CNC.TDP = machine.GetCore().Realize.GetJsonData()
+		if realize := machine.Realize; realize != nil {
+			CNC.TDP = machine.Realize.GetJsonData()
 		}
 
 		CNC.Light.HasLight = dto.Switchable.Light

@@ -48,7 +48,10 @@ const (
 	MyPositionZ    = "Z:"          // "Z_"
 	MyBufferLen    = "M_Buff_Len:"
 
-	Error            = "Error:"    // "E_"
+	Error            = "Error:"
+	Warning          = "Warning:"
+	Information      = "Info:"
+	Success          = "Success:"
 	MyWidth          = "M_Width:"  // "W_"
 	MyLength         = "M_Length:" // "L_"
 	MyHeight         = "M_Height:" // "H_"

@@ -6,6 +6,8 @@ import (
 	"bufio"
 	"context"
 	"errors"
+	"fmt"
+	"os"
 	"strconv"
 	"strings"
 	"sync"
@@ -16,23 +18,8 @@ var Machines = map[string]RealizeCNC{}
 
 const BaseTimeout = 11
 
-type AnyCNC interface {
-	GetCore() *CNCCore
-	GetDTO() CNC_DTO
-	SetDTO(DTO CNC_DTO)
-	Reconnect() error
-	GetLogs() []CNCService.Log
-	SendMessage(message []byte) bool
-	InitDevice() error
-	CNCStart()
-	StartTask(file []byte) error
-	UploadFile(filename string, file []byte)
-	CloseConnection()
-	CanExecuteTask() bool
-}
-
 type RealizeCNC interface {
-	AnyCNC
+	// AnyCNC
 	ExecuteTask(file []byte, ctx context.Context)
 	ParseCommand(Prefix, dataStr string)
 	InitRealization() error
@@ -40,9 +27,14 @@ type RealizeCNC interface {
 	SetCore(core *CNCCore)
 }
 
-type CNCCore struct {
-	DTO CNC_DTO
+type noCopy struct{}
 
+func (*noCopy) Lock()   {}
+func (*noCopy) Unlock() {}
+
+type CNCCore struct {
+	DTO     CNC_DTO
+	_       noCopy
 	Realize RealizeCNC `json:"-"`
 	// ReceiveBuffer  []byte                  `json:"-"`
 	ReceiveBuffer chan byte               `json:"-"`
@@ -54,7 +46,8 @@ type CNCCore struct {
 	Connection    Connectors.CNCConnector `json:"-"`
 
 	Logs     []CNCService.Log
-	WorkFile []string `json:"-"`
+	LogFile  *os.File `json:"-"`
+	Progress int      `json:"_"`
 }
 
 type CNC_DTO struct {
@@ -134,10 +127,12 @@ func (cnc *CNCCore) StartTask(file []byte) error {
 func (cnc *CNCCore) CNCStart() {
 	cnc.Transmitter.SyncBuffers(cnc.Connection)
 	cnc.ReceiveBuffer = make(chan byte, 1024)
+	cnc.CreateLogFile()
 	if !cnc.DTO.Switchable.Timeout {
 		go cnc.StartWatchcDog()
 		go cnc.CheckConnection_Async()
 	}
+
 	go cnc.readConnectionAsync()
 	go cnc.readResponces()
 	cnc.WriteLog(CNCService.LogLevelSuccess, "Successfully connected")
@@ -174,7 +169,7 @@ func (cnc *CNCCore) InitDevice() error {
 		return errors.New("the device did not respond to the request")
 	}
 	commands := strings.Split(res, CNCService.EndOfData)
-	// fmt.Printf("commands: %v\n", commands)
+	fmt.Printf("commands: %v\n", commands)
 	for _, comm := range commands {
 		cnc.parseCommand(comm)
 	}
@@ -251,13 +246,23 @@ func (cnc *CNCCore) CheckConnection_Async() {
 	}
 }
 
-func (cnc *CNCCore) LoadFileForWork(file []byte) error {
-	clear(cnc.WorkFile)
-	DataFile := string(file)
-	if cnc.Connection == nil {
-		return errors.New("device is not connected")
+func (cnc *CNCCore) CreateLogFile() {
+	var err error
+	cnc.LogFile, err = os.OpenFile(cnc.DTO.TARGET_MACHINE_NAME+".log",
+		os.O_APPEND|os.O_CREATE|os.O_WRONLY,
+		0666)
+	if err != nil {
+		// panic(err)
 	}
-	cnc.WorkFile = strings.Split(DataFile, "\n")
+}
+
+func (cnc *CNCCore) LoadFileForWork(file []byte) error {
+	// clear(cnc.WorkFile)
+	// DataFile := string(file)
+	// if cnc.Connection == nil {
+	// 	return errors.New("device is not connected")
+	// }
+	// cnc.WorkFile = strings.Split(DataFile, "\n")
 	return nil
 }
 
@@ -269,9 +274,6 @@ func (cnc *CNCCore) SetDTO(DTO CNC_DTO) {
 	cnc.DTO = DTO
 }
 
-func (cnc *CNCCore) GetCore() *CNCCore {
-	return cnc
-}
 func (cnc *CNCCore) getNextByteStream() []byte {
 	result := make([]byte, 0)
 	// cnc.Mutex.RLock()
@@ -325,7 +327,6 @@ func (cnc *CNCCore) GetLogs() []CNCService.Log {
 
 func (cnc *CNCCore) Reconnect() error {
 	// fmt.Println("Reconnect!")
-	// fmt.Printf("cnc.Connection: %v\n", cnc.Connection)
 	err := cnc.Connection.Reconnect()
 	if err != nil {
 		return err
@@ -333,7 +334,7 @@ func (cnc *CNCCore) Reconnect() error {
 	return nil
 }
 
-func Connect(typeOfConnection string, connectionData string) (AnyCNC, error) {
+func Connect(typeOfConnection string, connectionData string) (*CNCCore, error) {
 	Core := CNCCore{Mutex: &sync.RWMutex{}}
 	strs := strings.Split(connectionData, ":")
 
@@ -457,6 +458,7 @@ func RegisterCNC(name string, f func() RealizeCNC) {
 }
 
 func (cnc *CNCCore) parseCommand(Command string) {
+	Command, _ = strings.CutSuffix(Command, CNCService.EndOfData)
 	if len(Command) == 0 {
 		return
 	}
@@ -496,11 +498,19 @@ func (cnc *CNCCore) parseCommand(Command string) {
 	case CNCService.SwitchRGBLight:
 		cnc.DTO.Switchable.Light = (dataInt == 1)
 	case CNCService.Error:
-		cnc.WriteLog(dataStr, CNCService.LogLevelError)
+		cnc.WriteLog(CNCService.LogLevelError, dataStr)
+		cnc.LogFile.Write([]byte(time.Now().Format("dd.mm.yy") + "  Error:" + dataStr + "\n"))
+	case CNCService.Warning:
+		cnc.WriteLog(CNCService.LogLevelWarning, dataStr)
+		cnc.LogFile.Write([]byte(time.Now().Format("dd.mm.yy") + ":  Warning:" + dataStr + "\n"))
+	case CNCService.Information:
+		cnc.LogFile.Write([]byte(time.Now().Format("dd.mm.yy") + "  Info:" + dataStr + "\n"))
+		cnc.WriteLog(CNCService.LogLevelInformation, dataStr)
+	case CNCService.Success:
+		cnc.LogFile.Write([]byte(time.Now().Format("dd.mm.yy") + "  Success:" + dataStr + "\n"))
+		cnc.WriteLog(CNCService.LogLevelSuccess, dataStr)
 	default:
-		// fmt.Println("Realize")
 		if cnc.Realize != nil {
-			// fmt.Println("Realize +_ 2")
 			cnc.Realize.ParseCommand(prefix, dataStr)
 		}
 	}
