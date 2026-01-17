@@ -104,7 +104,6 @@ func (P *FDMPrinterData) ExecuteTask(file []byte, ctx context.Context) {
 			if res == "" || res == CNCService.EndOfData {
 				continue
 			}
-			// fmt.Printf("res: %v\n", res)
 			if ok := P.Core.SendMessage([]byte(res + CNCService.EndOfData)); !ok {
 				P.Core.WriteLog(CNCService.LogLevelError, "Printing aborted! Command cant send!")
 				return

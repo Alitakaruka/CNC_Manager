@@ -471,7 +471,6 @@ func (cnc *CNCCore) parseCommand(Command string) {
 	dataF32, _ := strconv.ParseFloat(dataStr, 32)
 	dataInt, _ := strconv.Atoi(dataStr)
 
-	// fmt.Printf("Command: %v\n", Command)
 	switch prefix {
 	case CNCService.DEVICE_CHIP_NAME:
 		cnc.DTO.Device_Chip_Name = dataStr
