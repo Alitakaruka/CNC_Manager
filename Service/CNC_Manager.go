@@ -19,11 +19,16 @@ type ConnectionData struct {
 }
 
 type CNCManagerr struct {
+	IsCharge     chan struct{}
+	Logs         []chan []byte
 	CNC_Machines []*CNC.CNCCore
 	DataBase     DataBase.PrinterRepository
 }
 
 func (CNC_M *CNCManagerr) InitManager(sqlPath string) {
+	CNC_M.IsCharge = make(chan struct{})
+	CNC_M.Logs = make([]chan []byte, 100)
+
 	CNC_M.DataBase.InitRepository(sqlPath)
 	machines := CNC_M.DataBase.GetAllMachines()
 	for _, machine := range machines {
@@ -77,6 +82,8 @@ func (CNC_M *CNCManagerr) Connect(conData ConnectionData) error {
 		}
 		newCNC.SetDTO(dto)
 		CNC_M.CNC_Machines = append(CNC_M.CNC_Machines, newCNC)
+		CNC_M.IsCharge <- struct{}{}
+
 		// CNC_M.DataBase.AddMachine(newCNC.GetCore())
 
 		newCNC.CNCStart()

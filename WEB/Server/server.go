@@ -4,12 +4,10 @@ import (
 	Service "CNCManager/Service"
 	"embed"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"log"
 	"net/http"
-	"sync"
 	"time"
 
 	"github.com/gorilla/websocket"
@@ -22,6 +20,8 @@ var ServerFile embed.FS
 type CNCServer struct {
 	SecondsWork uint32
 	Connections uint32
+
+	Hub *Hub
 
 	TimerUpdader  *WSTransmiterr
 	StatusUpdader *WSTransmiterr
@@ -38,6 +38,8 @@ func (PS *CNCServer) InitServer(port, addr, sqlPath string) {
 
 	PS.port = port
 	PS.Adrr = addr
+
+	PS.Hub = NewHub()
 
 	Service.InitPrinters()
 	PS.Manager.InitManager(sqlPath)
@@ -79,7 +81,7 @@ func (PS *CNCServer) Serve() {
 	go PS.CountTime()
 	go PS.UpdateLogs()
 
-	go PS.UpdateCNCTable()
+	// go PS.UpdateCNCTable()
 	go PS.UpdateStatus()
 	go PS.UpdateTimer()
 
@@ -199,147 +201,91 @@ func mainHandled(w http.ResponseWriter, r *http.Request) {
 
 // WEB SOCKET ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 func (PS *CNCServer) HandleWS(w http.ResponseWriter, r *http.Request) {
-	upgrader := websocket.Upgrader{CheckOrigin: func(r *http.Request) bool {
-		return true
-	}, EnableCompression: true}
-	WebSoc, err := upgrader.Upgrade(w, r, nil)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-	}
-	WebSoc.SetPingHandler(func(appdata string) error {
-		return WebSoc.WriteControl(websocket.PongMessage, []byte(appdata), time.Now().Add(5))
-	})
-	WebSoc.SetPongHandler(func(appdata string) error {
-		if appdata != "Ping" {
-			return errors.New("appdata error")
-		}
-		return nil
-	})
+	ServeWs(PS.Hub, w, r)
 
-	isClose := make(chan struct{})
-	WebSoc.SetCloseHandler(func(code int, text string) error {
-		PS.Connections--
-		close(isClose)
-		return nil
-	})
-	PS.Connections++
-	var mut sync.Mutex
-	//Reader
-	go func() {
-		ticker := time.NewTicker(PingTime)
+	// upgrader := websocket.Upgrader{CheckOrigin: func(r *http.Request) bool {
+	// 	return true
+	// }, EnableCompression: true}
+	// WebSoc, err := upgrader.Upgrade(w, r, nil)
+	// if err != nil {
+	// 	http.Error(w, err.Error(), http.StatusBadRequest)
+	// }
+	// WebSoc.SetPingHandler(func(appdata string) error {
+	// 	return WebSoc.WriteControl(websocket.PongMessage, []byte(appdata), time.Now().Add(5))
+	// })
+	// WebSoc.SetPongHandler(func(appdata string) error {
+	// 	if appdata != "Ping" {
+	// 		return errors.New("appdata error")
+	// 	}
+	// 	return nil
+	// })
 
-		go func() {
-			for {
-				select {
-				case <-ticker.C:
-					WebSoc.WriteControl(websocket.PingMessage, []byte("Ping"), time.Now().Add(PingTime))
-					ticker.Reset(time.Second * 5)
-				case <-isClose:
-					return
-				}
-			}
-		}()
-		for {
-			select {
-			case <-isClose:
-				return
-			default:
-				msgType, msg, err := WebSoc.ReadMessage()
-				if err != nil {
-					return
-				}
-				_ = msgType
-				if msgType == websocket.TextMessage {
-					Responce := PS.ExecuteWSMessage(string(msg), WebSoc)
-					mut.Lock()
-					WebSoc.WriteMessage(websocket.TextMessage, Responce)
-					mut.Unlock()
-				}
-			}
-		}
-	}()
+	// isClose := make(chan struct{})
+	// WebSoc.SetCloseHandler(func(code int, text string) error {
+	// 	PS.Connections--
+	// 	close(isClose)
+	// 	return nil
+	// })
+	// PS.Connections++
+	// var mut sync.Mutex
+	// //Reader
+	// go func() {
+	// 	ticker := time.NewTicker(PingTime)
 
-	go PS.WSWriteData(WebSoc, isClose, &mut)
+	// 	go func() {
+	// 		for {
+	// 			select {
+	// 			case <-ticker.C:
+	// 				WebSoc.WriteControl(websocket.PingMessage, []byte("Ping"), time.Now().Add(PingTime))
+	// 				ticker.Reset(time.Second * 5)
+	// 			case <-isClose:
+	// 				return
+	// 			}
+	// 		}
+	// 	}()
+	// 	for {
+	// 		select {
+	// 		case <-isClose:
+	// 			return
+	// 		default:
+	// 			msgType, msg, err := WebSoc.ReadMessage()
+	// 			if err != nil {
+	// 				return
+	// 			}
+	// 			_ = msgType
+	// 			if msgType == websocket.TextMessage {
+	// 				Responce := PS.ExecuteWSMessage(string(msg), WebSoc)
+	// 				mut.Lock()
+	// 				WebSoc.WriteMessage(websocket.TextMessage, Responce)
+	// 				mut.Unlock()
+	// 			}
+	// 		}
+	// 	}
+	// }()
+
+	// go PS.WSWriteData(WebSoc, isClose, &mut)
 }
 
 const PingTime = time.Second * 5
 
-func (PS *CNCServer) WSWriteData(WS *websocket.Conn, isClose chan struct{}, mut *sync.Mutex) {
-	//timer
+func (PS *CNCServer) DataUpdater() {
 	go func() {
-		for {
-			PS.TimerUpdader.WaitNewData()
-			cur := PS.TimerUpdader.GetNowData()
-			select {
-			case <-isClose:
-				return
-			default:
-				mut.Lock()
-				err := WS.WriteMessage(websocket.TextMessage, []byte(cur))
-				if err != nil {
-					log.Println(err)
-				}
-				mut.Unlock()
-			}
-		}
+		PS.TimerUpdader.WaitNewData()
+		PS.Hub.Send([]byte(PS.TimerUpdader.GetNowData()))
 	}()
-
 	go func() {
-		for {
-			PS.StatusUpdader.WaitNewData()
-			cur := PS.StatusUpdader.GetNowData()
-			select {
-			case <-isClose:
-				return
-			default:
-				mut.Lock()
-				err := WS.WriteMessage(websocket.TextMessage, []byte(cur))
-				mut.Unlock()
-				if err != nil {
-					log.Println(err)
-				}
-			}
-		}
+		PS.StatusUpdader.WaitNewData()
+		PS.Hub.Send([]byte(PS.StatusUpdader.GetNowData()))
 	}()
-
 	go func() {
-		for {
-			PS.TableUpdader.WaitNewData()
-			cur := PS.TableUpdader.GetNowData()
-			select {
-			case <-isClose:
-				return
-			default:
-				// fmt.Printf("TableUpdader: %v\n", cur)
-				mut.Lock()
-				err := WS.WriteMessage(websocket.TextMessage, []byte(cur))
-				mut.Unlock()
-				if err != nil {
-					log.Println(err)
-				}
-			}
-		}
+		<-PS.Manager.IsCharge
+		cncsJson := PS.Manager.GetJson()
+		PS.Hub.Send([]byte(cncsJson))
 	}()
-
 	go func() {
-		for {
-			PS.LogsUpdader.WaitNewData()
-			cur := PS.LogsUpdader.GetNowData()
-			// log.Println(cur)
-			select {
-			case <-isClose:
-				return
-			default:
-				mut.Lock()
-				err := WS.WriteMessage(websocket.TextMessage, []byte(cur))
-				mut.Unlock()
-				if err != nil {
-					log.Println(err)
-				}
-			}
-		}
+		PS.LogsUpdader.WaitNewData()
+		PS.Hub.Send([]byte(PS.LogsUpdader.GetNowData()))
 	}()
-
 }
 
 func (PS *CNCServer) ExecuteWSMessage(msg string, WS *websocket.Conn) []byte {
@@ -424,17 +370,18 @@ func (PS *CNCServer) ExecuteWSMessage(msg string, WS *websocket.Conn) []byte {
 	return []byte{}
 }
 
-func (PS *CNCServer) UpdateCNCTable() {
-	for {
-		// Send CNC machines data
-		cncsJson := PS.Manager.GetJson()
-		if cncsJson != "" && cncsJson != "[]" {
-			cncsMsg := fmt.Sprintf(`{"type":"printers","data":%s}`, cncsJson)
-			PS.TableUpdader.SetNewData(cncsMsg)
-		}
-		time.Sleep(50 * time.Millisecond)
-	}
-}
+// func (PS *CNCServer) UpdateCNCTable() {
+// 	for {
+// 		// Send CNC machines data
+// 		<-PS.Manager.IsCharge
+// 		cncsJson := PS.Manager.GetJson()
+// 		if cncsJson != "" && cncsJson != "[]" {
+// 			cncsMsg := fmt.Sprintf(`{"type":"printers","data":%s}`, cncsJson)
+// 			PS.TableUpdader.SetNewData(cncsMsg)
+// 		}
+// 		time.Sleep(50 * time.Millisecond)
+// 	}
+// }
 
 func (PS *CNCServer) UpdateTimer() {
 	for {

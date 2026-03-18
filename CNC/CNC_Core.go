@@ -33,8 +33,9 @@ func (*noCopy) Lock()   {}
 func (*noCopy) Unlock() {}
 
 type CNCCore struct {
-	DTO     CNC_DTO
-	_       noCopy
+	DTO CNC_DTO
+	_   noCopy
+
 	Realize RealizeCNC `json:"-"`
 	// ReceiveBuffer  []byte                  `json:"-"`
 	ReceiveBuffer chan byte               `json:"-"`
@@ -48,6 +49,8 @@ type CNCCore struct {
 	Logs     []CNCService.Log
 	LogFile  *os.File `json:"-"`
 	Progress int      `json:"_"`
+
+	IsCharge chan struct{}
 }
 
 type CNC_DTO struct {
@@ -125,6 +128,8 @@ func (cnc *CNCCore) StartTask(file []byte) error {
 }
 
 func (cnc *CNCCore) CNCStart() {
+	cnc.IsCharge = make(chan struct{})
+
 	cnc.Transmitter.SyncBuffers(cnc.Connection)
 	cnc.ReceiveBuffer = make(chan byte, 1024)
 	cnc.CreateLogFile()
@@ -195,6 +200,7 @@ func (cnc *CNCCore) WriteLog(logLevel, Log string) {
 		Log = cnc.DTO.TARGET_MACHINE_NAME + ":" + Log
 		cnc.Logs = append(cnc.Logs, CNCService.Log{Level: logLevel, Message: Log})
 	}
+	cnc.IsCharge <- struct{}{}
 }
 
 func (cnc *CNCCore) isConnected() bool {
@@ -513,4 +519,5 @@ func (cnc *CNCCore) parseCommand(Command string) {
 			cnc.Realize.ParseCommand(prefix, dataStr)
 		}
 	}
+	cnc.IsCharge <- struct{}{}
 }

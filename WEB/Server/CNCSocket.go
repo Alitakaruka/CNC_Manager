@@ -1,11 +1,189 @@
 package Server
 
 import (
+	"bytes"
 	"encoding/json"
+	"log"
+	"net/http"
 	"sync"
+	"time"
 
 	"github.com/gorilla/websocket"
 )
+
+type Client struct {
+	hub *Hub
+
+	// The websocket connection.
+	conn *websocket.Conn
+
+	// Buffered channel of outbound messages.
+	send chan []byte
+}
+
+// readPump pumps messages from the websocket connection to the hub.
+//
+// The application runs readPump in a per-connection goroutine. The application
+// ensures that there is at most one reader on a connection by executing all
+// reads from this goroutine.
+func (c *Client) ReadPump() {
+	defer func() {
+		c.hub.unregister <- c
+		c.conn.Close()
+	}()
+	// c.conn.SetReadLimit(maxMessageSize)
+	c.conn.SetReadDeadline(time.Now().Add(60 * time.Second))
+	c.conn.SetPongHandler(func(string) error { c.conn.SetReadDeadline(time.Now().Add(60 * time.Second)); return nil })
+
+	for {
+		_, message, err := c.conn.ReadMessage()
+		// fmt.Printf("message: %v\n", len(message))
+		if err != nil {
+			if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseAbnormalClosure) {
+				log.Printf("error: %v", err)
+			}
+			break
+		}
+		message = bytes.TrimSpace(bytes.Replace(message, []byte{'\n'}, []byte{' '}, -1))
+		c.hub.broadcast <- message
+	}
+}
+
+// writePump pumps messages from the hub to the websocket connection.
+//
+// A goroutine running writePump is started for each connection. The
+// application ensures that there is at most one writer to a connection by
+// executing all writes from this goroutine.
+func (c *Client) WritePump() {
+	ticker := time.NewTicker(time.Second * 10)
+	defer func() {
+		ticker.Stop()
+		c.conn.Close()
+	}()
+	for {
+		select {
+		case message, ok := <-c.send:
+			c.conn.SetWriteDeadline(time.Now().Add(time.Second * 10))
+			if !ok {
+				// The hub closed the channel.
+				c.conn.WriteMessage(websocket.CloseMessage, []byte{})
+				return
+			}
+
+			w, err := c.conn.NextWriter(websocket.TextMessage)
+			if err != nil {
+				return
+			}
+			w.Write(message)
+
+			// Add queued chat messages to the current websocket message.
+			n := len(c.send)
+			for i := 0; i < n; i++ {
+				w.Write([]byte{'\n'})
+				w.Write(<-c.send)
+			}
+
+			if err := w.Close(); err != nil {
+				return
+			}
+		case <-ticker.C:
+			c.conn.SetWriteDeadline(time.Now().Add(time.Second * 10))
+			if err := c.conn.WriteMessage(websocket.PingMessage, nil); err != nil {
+				return
+			}
+		}
+	}
+}
+
+// serveWs handles websocket requests from the peer.
+func ServeWs(hub *Hub, w http.ResponseWriter, r *http.Request) {
+	upgrader := websocket.Upgrader{}
+	conn, err := upgrader.Upgrade(w, r, nil)
+	if err != nil {
+		log.Println(err)
+		return
+	}
+	client := &Client{hub: hub, conn: conn, send: make(chan []byte, 256)}
+	client.hub.register <- client
+
+	// Allow collection of memory referenced by the caller by doing all work in
+	// new goroutines.
+	go client.WritePump()
+	go client.ReadPump()
+}
+
+type Hub struct {
+	//Byffer for new or reconnected clients
+	ramBuffer [][]byte
+	// Registered clients.
+	clients map[*Client]bool
+	// Inbound messages from the clients.
+	broadcast chan []byte
+	// Register requests from the clients.
+	register chan *Client
+	// Unregister requests from clients.
+	unregister chan *Client
+}
+
+func NewHub() *Hub {
+	return &Hub{
+		ramBuffer:  make([][]byte, 0),
+		broadcast:  make(chan []byte),
+		register:   make(chan *Client),
+		unregister: make(chan *Client),
+		clients:    make(map[*Client]bool),
+	}
+}
+
+func (h *Hub) Run() {
+	for {
+		select {
+		case client := <-h.register:
+			h.clients[client] = true
+
+			for _, val := range h.ramBuffer {
+				select {
+				case client.send <- val:
+				default:
+					close(client.send)
+					delete(h.clients, client)
+				}
+			}
+
+			// for i := 0; i < len(h.ramBuffer); i++ {
+			// 	select {
+			// 	case client.send <- h.ramBuffer[i]:
+			// 	default:
+			// 		close(client.send)
+			// 		delete(h.clients, client)
+			// 	}
+			// }
+		case client := <-h.unregister:
+			if _, ok := h.clients[client]; ok {
+				delete(h.clients, client)
+				close(client.send)
+			}
+		case message := <-h.broadcast:
+			//Write message to local buffer
+			h.ramBuffer = append(h.ramBuffer, message)
+			if len(h.ramBuffer) > 100 { //save last 100 massages
+				h.ramBuffer = h.ramBuffer[1:]
+			}
+			for client := range h.clients {
+				select {
+				case client.send <- message:
+				default:
+					close(client.send)
+					delete(h.clients, client)
+				}
+			}
+		}
+	}
+}
+
+func (h *Hub) Send(msg []byte) {
+	h.broadcast <- msg
+}
 
 type WSTransmiterr struct {
 	Data  string
