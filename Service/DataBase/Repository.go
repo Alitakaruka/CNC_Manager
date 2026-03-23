@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"log"
-	"sync"
 )
 
 type PrinterRepository struct {
@@ -172,7 +171,7 @@ func (PR *PrinterRepository) GetAllMachines() []*CNC.CNCCore {
 			log.Println(err)
 			return result
 		}
-		core := CNC.CNCCore{Mutex: &sync.RWMutex{}}
+		core := CNC.CNCCore{}
 		core.DTO.UniqueKey = Scan.UniqueKey
 		core.DTO.MACHINE_TYPE = Scan.MACHINE_TYPE
 		core.DTO.TARGET_MACHINE_NAME = Scan.TARGET_MACHINE_NAME

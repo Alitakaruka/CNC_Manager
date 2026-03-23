@@ -6,6 +6,7 @@ import (
 	"io"
 	"log"
 	"os"
+	"path/filepath"
 )
 
 func main() {
@@ -22,18 +23,28 @@ func main() {
 		sqlPath = config.Database.Path
 		logerPath = config.Logs.Path
 	}
-	startLoger(logerPath)
+	if err := startLogger(logerPath); err != nil {
+		log.Fatal(err)
+	}
 	server := TDServer.CNCServer{}
 	server.InitServer(port, addr, sqlPath)
 	server.Serve()
 }
 
-func startLoger(filePath string) {
-	file, ex := os.OpenFile(filePath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0666)
-	if ex != nil {
-		log.Fatal(ex)
+func startLogger(filePath string) error {
+	dir := filepath.Dir(filePath)
+	if dir != "." && dir != string(os.PathSeparator) {
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			return err
+		}
+	}
+
+	file, err := os.OpenFile(filePath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
+	if err != nil {
+		return err
 	}
 	muliWriter := io.MultiWriter(os.Stdout, file)
 	log.SetFlags(log.Ltime | log.Ldate | log.Llongfile)
 	log.SetOutput(muliWriter)
+	return nil
 }

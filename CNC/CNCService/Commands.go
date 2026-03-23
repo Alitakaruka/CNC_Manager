@@ -63,8 +63,8 @@ const (
 	SwitchHasLight = "HasLight:"
 	SwitchRGBLight = "RGBLight:"
 
-	ConnectionType = "ConnectionType:"
-	SYNC           = "SYNC"
+	// ConnectionType = "ConnectionType:"
+	SYNC = "SYNC"
 )
 
 // Immutable
@@ -96,6 +96,12 @@ const (
 const PrinterTimeOut = 10
 const InformationUpdateTime = 4
 
-func DeleteComments_GCode(Command string) string {
-	return strings.SplitN(Command, ";", 2)[0]
+func DeleteGCodeComments(command string) string {
+	before, _, _ := strings.Cut(command, ";")
+	return before
+}
+
+// DeleteComments_GCode is kept for backward compatibility.
+func DeleteComments_GCode(command string) string {
+	return DeleteGCodeComments(command)
 }

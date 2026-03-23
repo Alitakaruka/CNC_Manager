@@ -3,6 +3,7 @@ package Server
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"log"
 	"net/http"
 	"sync"
@@ -13,7 +14,7 @@ import (
 
 type Client struct {
 	hub *Hub
-
+	mut sync.Mutex
 	// The websocket connection.
 	conn *websocket.Conn
 
@@ -21,23 +22,29 @@ type Client struct {
 	send chan []byte
 }
 
+func (C *Client) WriteMessage(message []byte) {
+	C.mut.Lock()
+	C.conn.WriteMessage(websocket.TextMessage, message)
+	C.mut.Unlock()
+}
+
 // readPump pumps messages from the websocket connection to the hub.
 //
 // The application runs readPump in a per-connection goroutine. The application
 // ensures that there is at most one reader on a connection by executing all
 // reads from this goroutine.
-func (c *Client) ReadPump() {
+func (c *Client) ReadPump(callBack func(client *Client, message []byte)) {
 	defer func() {
 		c.hub.unregister <- c
 		c.conn.Close()
 	}()
-	// c.conn.SetReadLimit(maxMessageSize)
+	c.conn.SetReadLimit(1024)
 	c.conn.SetReadDeadline(time.Now().Add(60 * time.Second))
 	c.conn.SetPongHandler(func(string) error { c.conn.SetReadDeadline(time.Now().Add(60 * time.Second)); return nil })
 
 	for {
 		_, message, err := c.conn.ReadMessage()
-		// fmt.Printf("message: %v\n", len(message))
+		log.Printf("WS message:%v \n", string(message))
 		if err != nil {
 			if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseAbnormalClosure) {
 				log.Printf("error: %v", err)
@@ -45,15 +52,10 @@ func (c *Client) ReadPump() {
 			break
 		}
 		message = bytes.TrimSpace(bytes.Replace(message, []byte{'\n'}, []byte{' '}, -1))
-		c.hub.broadcast <- message
+		callBack(c, message)
 	}
 }
 
-// writePump pumps messages from the hub to the websocket connection.
-//
-// A goroutine running writePump is started for each connection. The
-// application ensures that there is at most one writer to a connection by
-// executing all writes from this goroutine.
 func (c *Client) WritePump() {
 	ticker := time.NewTicker(time.Second * 10)
 	defer func() {
@@ -96,20 +98,21 @@ func (c *Client) WritePump() {
 }
 
 // serveWs handles websocket requests from the peer.
-func ServeWs(hub *Hub, w http.ResponseWriter, r *http.Request) {
+func ServeWs(hub *Hub, ReadCallBackFunc func(client *Client, message []byte), w http.ResponseWriter, r *http.Request) {
 	upgrader := websocket.Upgrader{}
 	conn, err := upgrader.Upgrade(w, r, nil)
+
 	if err != nil {
 		log.Println(err)
 		return
 	}
-	client := &Client{hub: hub, conn: conn, send: make(chan []byte, 256)}
+	client := &Client{hub: hub, conn: conn, send: make(chan []byte, 1024)}
 	client.hub.register <- client
 
-	// Allow collection of memory referenced by the caller by doing all work in
-	// new goroutines.
 	go client.WritePump()
-	go client.ReadPump()
+	go client.ReadPump(ReadCallBackFunc)
+
+	log.Println("New connection accepted sucsessfuly!")
 }
 
 type Hub struct {
@@ -140,7 +143,9 @@ func (h *Hub) Run() {
 		select {
 		case client := <-h.register:
 			h.clients[client] = true
+			fmt.Println("test1")
 
+			fmt.Printf("h.ramBuffer: %v\n", h.ramBuffer)
 			for _, val := range h.ramBuffer {
 				select {
 				case client.send <- val:
@@ -149,22 +154,16 @@ func (h *Hub) Run() {
 					delete(h.clients, client)
 				}
 			}
-
-			// for i := 0; i < len(h.ramBuffer); i++ {
-			// 	select {
-			// 	case client.send <- h.ramBuffer[i]:
-			// 	default:
-			// 		close(client.send)
-			// 		delete(h.clients, client)
-			// 	}
-			// }
 		case client := <-h.unregister:
+			fmt.Println("test2")
+
 			if _, ok := h.clients[client]; ok {
 				delete(h.clients, client)
 				close(client.send)
 			}
 		case message := <-h.broadcast:
-			//Write message to local buffer
+			fmt.Println("test3")
+
 			h.ramBuffer = append(h.ramBuffer, message)
 			if len(h.ramBuffer) > 100 { //save last 100 massages
 				h.ramBuffer = h.ramBuffer[1:]

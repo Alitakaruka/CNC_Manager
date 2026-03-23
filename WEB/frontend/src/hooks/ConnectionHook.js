@@ -58,12 +58,18 @@ export default async function ConnectCNC(TypeOfConnection = "", ConnectionData =
   }
 
   // Валидация COM порта
-  if (TypeOfConnection === "COM" && (!/^COM\d+$/i.test(ConnectionData)) &&  !/^\/dev\/(tty(USB|ACM)\d+|ttyS\d+|serial\/(by-id|by-path)\/.+)$/.test(ConnectionData)){
-      throw new Error(
+if (
+  TypeOfConnection === "COM" &&
+  !(
+    /^COM\d+$/i.test(ConnectionData) ||
+    /^\/dev\/ttyUSB\d+$/.test(ConnectionData)
+  )
+) {
+  throw new Error(
     "Неверный формат порта. Примеры:\n" +
     "Windows: COM3\n" +
     "Linux: /dev/ttyUSB0, /dev/ttyACM0, /dev/serial/by-id/..."
-  )
+  );
 }
 
   // Валидация IP адреса

@@ -18,20 +18,22 @@ type ConnectionData struct {
 	ConnectionData   string
 }
 
-type CNCManagerr struct {
+type CNCManager struct {
 	IsCharge     chan struct{}
-	Logs         []chan []byte
 	CNC_Machines []*CNC.CNCCore
 	DataBase     DataBase.PrinterRepository
 }
 
-func (CNC_M *CNCManagerr) InitManager(sqlPath string) {
-	CNC_M.IsCharge = make(chan struct{})
-	CNC_M.Logs = make([]chan []byte, 100)
+// CNCManagerr is kept for backward compatibility.
+type CNCManagerr = CNCManager
+
+func (CNC_M *CNCManager) InitManager(sqlPath string) {
+	CNC_M.IsCharge = make(chan struct{}, 1)
 
 	CNC_M.DataBase.InitRepository(sqlPath)
 	machines := CNC_M.DataBase.GetAllMachines()
 	for _, machine := range machines {
+		machine := machine
 		machine.Connection = CNC.GetConnector(machine.DTO.ConnectionData, machine.DTO.ConnectionString)
 		if machine.Connection != nil {
 			go func() {
@@ -51,11 +53,12 @@ func (CNC_M *CNCManagerr) InitManager(sqlPath string) {
 		} else {
 			machine.WriteLog(CNCService.LogLevelWarning, "Failed to connect to the machine")
 		}
-		// CNC_M.CNC_Machines = append(CNC_M.CNC_Machines, &machine)
+		CNC_M.CNC_Machines = append(CNC_M.CNC_Machines, machine)
 	}
 }
 
-func (CNC_M *CNCManagerr) Connect(conData ConnectionData) error {
+func (CNC_M *CNCManager) Connect(conData ConnectionData) error {
+	fmt.Println("(CNC_M *CNCManager) Connect")
 	if index, find := CNC_M.findByConnectionData(conData); find {
 		if CNC_M.IsConnected(index) {
 			return errors.New("CNC is already connected")
@@ -63,11 +66,11 @@ func (CNC_M *CNCManagerr) Connect(conData ConnectionData) error {
 			return CNC_M.reconect(index)
 		}
 	} else {
+
 		newCNC, ex := CNC.Connect(conData.TypeOfConnection, conData.ConnectionData)
 		if ex != nil {
 			return ex
 		}
-
 		err := newCNC.InitDevice()
 
 		if err != nil {
@@ -82,8 +85,18 @@ func (CNC_M *CNCManagerr) Connect(conData ConnectionData) error {
 		}
 		newCNC.SetDTO(dto)
 		CNC_M.CNC_Machines = append(CNC_M.CNC_Machines, newCNC)
-		CNC_M.IsCharge <- struct{}{}
+		select {
+		case CNC_M.IsCharge <- struct{}{}:
+		default:
+		}
 
+		go func() {
+			<-newCNC.IsCharge
+			select {
+			case CNC_M.IsCharge <- struct{}{}:
+			default:
+			}
+		}()
 		// CNC_M.DataBase.AddMachine(newCNC.GetCore())
 
 		newCNC.CNCStart()
@@ -91,27 +104,12 @@ func (CNC_M *CNCManagerr) Connect(conData ConnectionData) error {
 	}
 }
 
-// func copyCommonFields(src, dst any) {
-// 	s := reflect.ValueOf(src).Elem()
-// 	d := reflect.ValueOf(dst).Elem()
-
-// 	for i := 0; i < s.NumField(); i++ {
-// 		f := s.Type().Field(i)
-// 		sv := s.Field(i)
-
-// 		dv := d.FieldByName(f.Name)
-// 		if dv.IsValid() && dv.Type() == sv.Type() && dv.CanSet() {
-// 			dv.Set(sv)
-// 		}
-// 	}
-// }
-
-func (CNC_M *CNCManagerr) IsConnected(index int) bool {
+func (CNC_M *CNCManager) IsConnected(index int) bool {
 	DTO := CNC_M.CNC_Machines[index].GetDTO()
 	return DTO.Flags.Connected
 }
 
-func (CNC_M *CNCManagerr) findByConnectionData(ConData ConnectionData) (int, bool) {
+func (CNC_M *CNCManager) findByConnectionData(ConData ConnectionData) (int, bool) {
 	ConnectionString := ConData.TypeOfConnection + ":" + ConData.ConnectionData
 	for ind, CNC := range CNC_M.CNC_Machines {
 		DTO := CNC.GetDTO()
@@ -122,7 +120,7 @@ func (CNC_M *CNCManagerr) findByConnectionData(ConData ConnectionData) (int, boo
 	return 0, false
 }
 
-func (CNC_M *CNCManagerr) findByKey(key string) (int, bool) {
+func (CNC_M *CNCManager) findByKey(key string) (int, bool) {
 	for ind, CNC := range CNC_M.CNC_Machines {
 		DTO := CNC.GetDTO()
 		if DTO.UniqueKey == key {
@@ -132,7 +130,7 @@ func (CNC_M *CNCManagerr) findByKey(key string) (int, bool) {
 	return 0, false
 }
 
-func (CNC_M *CNCManagerr) ExecuteTask(key string, byteFile []byte) error {
+func (CNC_M *CNCManager) ExecuteTask(key string, byteFile []byte) error {
 	if index, find := CNC_M.findByKey(key); find {
 		cnc := CNC_M.CNC_Machines[index]
 		err := cnc.StartTask(byteFile)
@@ -146,7 +144,7 @@ func (CNC_M *CNCManagerr) ExecuteTask(key string, byteFile []byte) error {
 	return nil
 }
 
-func (CNC_M *CNCManagerr) reconect(index int) error {
+func (CNC_M *CNCManager) reconect(index int) error {
 	CNC := CNC_M.CNC_Machines[index]
 	err := CNC.Reconnect()
 	if err != nil {
@@ -161,7 +159,7 @@ func (CNC_M *CNCManagerr) reconect(index int) error {
 	return nil
 }
 
-func (CNC_M *CNCManagerr) Reconnect(uniqueKey string) error {
+func (CNC_M *CNCManager) Reconnect(uniqueKey string) error {
 	if ind, ok := CNC_M.findByKey(uniqueKey); ok {
 		return CNC_M.reconect(ind)
 	}
@@ -200,7 +198,7 @@ type CNC_JSON struct {
 	} `json:"light"`
 }
 
-func (CNC_M *CNCManagerr) GetJson() string {
+func (CNC_M *CNCManager) GetJson() string {
 	CNCs := make([]CNC_JSON, 0, len(CNC_M.CNC_Machines))
 
 	for _, machine := range CNC_M.CNC_Machines {
@@ -254,7 +252,7 @@ func getMachineTypeName(machineType int) string {
 	return "Unknown"
 }
 
-func (CNC_M *CNCManagerr) GetAllLogs() []CNCService.Log {
+func (CNC_M *CNCManager) GetAllLogs() []CNCService.Log {
 	result := make([]CNCService.Log, 0)
 	for _, CNC := range CNC_M.CNC_Machines {
 		Logs := CNC.GetLogs()
@@ -263,23 +261,28 @@ func (CNC_M *CNCManagerr) GetAllLogs() []CNCService.Log {
 	return result
 }
 
-func (CNC_M *CNCManagerr) SendGCode(GCode, Key string) error {
-	Commands := strings.Split(GCode, "\n")
-	for _, val := range Commands {
-		fmt.Printf("val: %v\n", val)
-		if ind, find := CNC_M.findByKey(Key); find {
-			go CNC_M.CNC_Machines[ind].SendMessage([]byte(val + CNCService.EndOfData))
-			return nil
-		}
+func (CNC_M *CNCManager) SendGCode(GCode, Key string) error {
+	ind, find := CNC_M.findByKey(Key)
+	if !find {
+		return errors.New("CNC not found")
 	}
-	return errors.New("CNC not found")
+
+	cnc := CNC_M.CNC_Machines[ind]
+	commands := strings.Split(GCode, "\n")
+	go func() {
+		for _, val := range commands {
+			val = strings.TrimSpace(val)
+			if val == "" {
+				continue
+			}
+			cnc.SendMessage([]byte(val + CNCService.EndOfData))
+		}
+	}()
+
+	return nil
 }
 
-func (CNC_M *CNCManagerr) SaveSettings() {
-
-}
-
-func (CNC_M *CNCManagerr) GenerateUniqueKey() string {
+func (CNC_M *CNCManager) GenerateUniqueKey() string {
 	for {
 		key := GenerateRandomKey()
 		if CNC_M.isUnique(key) {
@@ -288,7 +291,7 @@ func (CNC_M *CNCManagerr) GenerateUniqueKey() string {
 	}
 }
 
-func (CNC_M *CNCManagerr) isUnique(key string) bool {
+func (CNC_M *CNCManager) isUnique(key string) bool {
 	for _, CNC := range CNC_M.CNC_Machines {
 		DTO := CNC.GetDTO()
 		if DTO.UniqueKey == key {
@@ -306,7 +309,7 @@ func GenerateRandomKey() string {
 	return hex.EncodeToString(bytes)
 }
 
-func (CNC_M *CNCManagerr) UploadFile(key, filename string, file []byte) error {
+func (CNC_M *CNCManager) UploadFile(key, filename string, file []byte) error {
 	index, ok := CNC_M.findByKey(key)
 	if !ok {
 		return errors.New("the device doesnt find")
