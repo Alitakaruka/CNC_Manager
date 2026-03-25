@@ -1,14 +1,13 @@
 package Connectors
 
 import (
-	"io"
 	"strconv"
 
 	Serial "github.com/jacobsa/go-serial/serial"
 )
 
 type SerialConnector struct {
-	io.ReadWriteCloser
+	trackCloser
 	PortName string
 	BaudRate int
 }
@@ -34,7 +33,7 @@ func (SC *SerialConnector) Connect() error {
 		return ex
 	}
 
-	SC.ReadWriteCloser = port
+	SC.trackCloser.InitTracker(port)
 	return nil
 }
 

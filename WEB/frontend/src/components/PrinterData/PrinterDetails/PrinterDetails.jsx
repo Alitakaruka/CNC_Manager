@@ -80,16 +80,31 @@ export default function Details({ PrinterData, SetDetailsIsOpen }) {
       }
     })
 
-    // Подписка на полный список принтеров (может содержать обновления)
-    const offPrinters = wsClient.on('printers', (printersList) => {
+    // Тот же канал printers: полный список или снимок одного станка (объект / [one])
+    const offPrinters = wsClient.on('printers', (payload) => {
       const currentKey = uniqueKeyRef.current
-      if (Array.isArray(printersList)) {
-        const updatedPrinter = printersList.find(
+      if (!currentKey) return
+
+      const mergeIfCurrent = (p) => {
+        if (!p) return
+        if (p.uniqueKey === currentKey || p.UniqueKey === currentKey) {
+          setCurrentPrinterData(prev => ({ ...prev, ...p }))
+        }
+      }
+
+      if (Array.isArray(payload)) {
+        if (payload.length === 1) {
+          mergeIfCurrent(payload[0])
+          return
+        }
+        const updatedPrinter = payload.find(
           p => (p.uniqueKey === currentKey || p.UniqueKey === currentKey)
         )
-        if (updatedPrinter) {
-          setCurrentPrinterData(prev => ({ ...prev, ...updatedPrinter }))
-        }
+        mergeIfCurrent(updatedPrinter)
+        return
+      }
+      if (payload && typeof payload === 'object') {
+        mergeIfCurrent(payload)
       }
     })
 

@@ -1,10 +1,9 @@
 package CNCService
 
 import (
+	"fmt"
 	"io"
 	"log"
-	"strconv"
-	"strings"
 	"sync"
 	"time"
 )
@@ -27,12 +26,11 @@ func (T *Transmitter) Trainsmit(bytes int) {
 
 func (T *Transmitter) ACK() {
 	if len(T.Commands) == 0 {
-		// fmt.Print("ACK LEN = 0!!!!!!")
 		return
 	}
-	// fmt.Printf("T.CurrentFreeBytes: %v\n", T.CurrentFreeBytes)
+	fmt.Printf("T.CurrentFreeBytes: %v\n", T.CurrentFreeBytes)
 	T.mutex.Lock()
-	// fmt.Println("ACK")
+	fmt.Println("ACK")
 	val := T.Commands[0]
 	T.CurrentFreeBytes += val
 	T.Commands = T.Commands[1:]
@@ -40,38 +38,38 @@ func (T *Transmitter) ACK() {
 	T.mutex.Unlock()
 }
 
-func (T *Transmitter) SetMaxBytes(MaxBytes int) {
+// func (T *Transmitter) SyncBuffers(Connection io.ReadWriter) {
+// 	T.mutex.Lock()
+// 	defer T.mutex.Unlock()
+
+// 	reader := NewTimeoutReader(Connection, time.Second*2)
+// 	Connection.Write([]byte(EndOfData + SYNC + EndOfData))
+// 	result := reader.Read()
+// 	if result == "" {
+// 		return
+// 	}
+// 	commands := strings.Split(result, EndOfData)
+// 	for _, val := range commands {
+// 		if strings.HasPrefix(val, MyBufferLen) {
+// 			str, _ := strings.CutPrefix(val, MyBufferLen)
+// 			MaxSize, err := strconv.Atoi(str)
+// 			if err != nil {
+// 				log.Println(err)
+// 			}
+// 			T.MaxBytes = MaxSize
+// 			T.CurrentFreeBytes = MaxSize
+// 		}
+// 	}
+// 	// fmt.Printf("T.MaxBytes: %v\n", T.MaxBytes)
+// 	// fmt.Printf("T.CurrentFreeBytes: %v\n", T.CurrentFreeBytes)
+// }
+
+func (T *Transmitter) SetLimits(MaxBytes, CurrentFreeBytes int) {
 	T.mutex.Lock()
 	T.MaxBytes = MaxBytes
-	T.CurrentFreeBytes = MaxBytes
+	T.CurrentFreeBytes = CurrentFreeBytes
 	T.mutex.Unlock()
 }
-
-func (T *Transmitter) SyncBuffers(Connection io.ReadWriter) {
-	T.mutex.Lock()
-	defer T.mutex.Unlock()
-	reader := NewTimeoutReader(Connection, time.Second*2)
-	Connection.Write([]byte(EndOfData + SYNC + EndOfData))
-	result := reader.Read()
-	if result == "" {
-		return
-	}
-	commands := strings.Split(result, EndOfData)
-	for _, val := range commands {
-		if strings.HasPrefix(val, MyBufferLen) {
-			str, _ := strings.CutPrefix(val, MyBufferLen)
-			MaxSize, err := strconv.Atoi(str)
-			if err != nil {
-				log.Println(err)
-			}
-			T.MaxBytes = MaxSize
-			T.CurrentFreeBytes = MaxSize
-		}
-	}
-	// fmt.Printf("T.MaxBytes: %v\n", T.MaxBytes)
-	// fmt.Printf("T.CurrentFreeBytes: %v\n", T.CurrentFreeBytes)
-}
-
 func (transmitter *Transmitter) Wait(bytes int) bool {
 	if bytes > transmitter.MaxBytes {
 		return false
@@ -138,6 +136,7 @@ func (PR *TimeoutReader) Read() string {
 		n, err := PR.readWithTimeout(readBuf, timer)
 		timer.Stop()
 		if err != nil {
+			log.Println(err)
 			return string(PR.buffer)
 		}
 		if n > 0 {

@@ -12,12 +12,15 @@ import (
 func main() {
 	config := Service.GetConfig("config.yaml")
 	var port, addr, sqlPath, logerPath string
+	var maxLogs int
 	if config == nil {
+		maxLogs = 100
 		port = "8080"
 		addr = "0.0.0.0"
 		sqlPath = "CNCManagerDB.db"
 		logerPath = "Logs.log"
 	} else {
+		maxLogs = config.Server.MaxLogs
 		port = config.Server.Port
 		addr = config.Server.Addr
 		sqlPath = config.Database.Path
@@ -27,7 +30,7 @@ func main() {
 		log.Fatal(err)
 	}
 	server := TDServer.CNCServer{}
-	server.InitServer(port, addr, sqlPath)
+	server.InitServer(port, addr, sqlPath, maxLogs)
 	server.Serve()
 }
 

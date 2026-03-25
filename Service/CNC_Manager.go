@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"log"
 	"strings"
+	"time"
 )
 
 type ConnectionData struct {
@@ -19,16 +20,51 @@ type ConnectionData struct {
 }
 
 type CNCManager struct {
-	IsCharge     chan struct{}
+	IsChargeTable    chan []byte
+	TimeIsCharged    chan []byte
+	NewDataCncBuffer chan []byte
+	IsStatusCharge   chan []byte
+
+	online  int
+	ofline  int
+	working int
+	total   int
+
 	CNC_Machines []*CNC.CNCCore
 	DataBase     DataBase.PrinterRepository
 }
 
-// CNCManagerr is kept for backward compatibility.
-type CNCManagerr = CNCManager
-
 func (CNC_M *CNCManager) InitManager(sqlPath string) {
-	CNC_M.IsCharge = make(chan struct{}, 1)
+	CNC_M.IsChargeTable = make(chan []byte)
+	CNC_M.TimeIsCharged = make(chan []byte)
+	CNC_M.NewDataCncBuffer = make(chan []byte, 100)
+	CNC_M.IsStatusCharge = make(chan []byte)
+
+	//TimerUpgrade
+	go func() {
+		seconds := 0
+
+		Trig := make(chan struct{}, 1)
+		ticker := time.NewTicker(time.Second * 60)
+		defer ticker.Stop()
+
+		go func() {
+			for range ticker.C {
+				Trig <- struct{}{}
+			}
+		}()
+		for range Trig {
+			seconds += 60
+			curTime := seconds
+			days := curTime / 86400
+			curTime %= 86400
+			hours := curTime / 3600
+			curTime %= 3600
+			minutes := curTime / 60
+			curTime %= 60
+			CNC_M.TimeIsCharged <- []byte(fmt.Sprintf("%dd %dh %dm", days, hours, minutes))
+		}
+	}()
 
 	CNC_M.DataBase.InitRepository(sqlPath)
 	machines := CNC_M.DataBase.GetAllMachines()
@@ -58,7 +94,6 @@ func (CNC_M *CNCManager) InitManager(sqlPath string) {
 }
 
 func (CNC_M *CNCManager) Connect(conData ConnectionData) error {
-	fmt.Println("(CNC_M *CNCManager) Connect")
 	if index, find := CNC_M.findByConnectionData(conData); find {
 		if CNC_M.IsConnected(index) {
 			return errors.New("CNC is already connected")
@@ -68,16 +103,17 @@ func (CNC_M *CNCManager) Connect(conData ConnectionData) error {
 	} else {
 
 		newCNC, ex := CNC.Connect(conData.TypeOfConnection, conData.ConnectionData)
+		log.Printf("Connected by type %v, data: %v\n", conData.TypeOfConnection, conData.ConnectionData)
 		if ex != nil {
 			return ex
 		}
 		err := newCNC.InitDevice()
 
 		if err != nil {
+			log.Printf("Device init error:%v", err)
 			newCNC.CloseConnection()
 			return err
 		}
-
 		// Get DTO and set unique key if not set
 		dto := newCNC.GetDTO()
 		if dto.UniqueKey == "" {
@@ -85,23 +121,53 @@ func (CNC_M *CNCManager) Connect(conData ConnectionData) error {
 		}
 		newCNC.SetDTO(dto)
 		CNC_M.CNC_Machines = append(CNC_M.CNC_Machines, newCNC)
-		select {
-		case CNC_M.IsCharge <- struct{}{}:
-		default:
-		}
 
-		go func() {
-			<-newCNC.IsCharge
-			select {
-			case CNC_M.IsCharge <- struct{}{}:
-			default:
-			}
-		}()
-		// CNC_M.DataBase.AddMachine(newCNC.GetCore())
+		go CNC_M.UpdateJsonData(newCNC)
+		CNC_M.IsChargeTable <- []byte(CNC_M.GetJson())
+		go newCNC.CNCStart()
 
-		newCNC.CNCStart()
+		log.Println("New cnc start success!")
+		newCNC.WriteLog(CNCService.LogLevelSuccess, "Successfully connected")
+
 		return nil
 	}
+}
+
+func (CNC_M *CNCManager) GetTimeCharge() []byte {
+	return <-CNC_M.TimeIsCharged
+}
+
+func (CNC_M *CNCManager) UpdateJsonData(Machine *CNC.CNCCore) {
+	CNC_M.online++
+	CNC_M.chargeStatus()
+	for {
+		select {
+		case <-Machine.IsCharge:
+			json := CNC_M.GetMachineJson(Machine)
+			CNC_M.NewDataCncBuffer <- json
+		case <-Machine.IsClose:
+			CNC_M.online--
+			CNC_M.chargeStatus()
+			CNC_M.NewDataCncBuffer <- CNC_M.GetMachineJson(Machine)
+			return
+		}
+	}
+}
+
+func (CNC_M *CNCManager) chargeStatus() {
+	CNC_M.IsStatusCharge <- []byte(fmt.Sprintf(`{"type":"status","data":{"online":%d,"printing":%d,"offline":%d,"total":%d}}`, CNC_M.online, CNC_M.working, CNC_M.ofline, CNC_M.total))
+}
+
+func (CNC_M *CNCManager) GetStatus() []byte {
+	return <-CNC_M.IsStatusCharge
+}
+
+func (CNC_M *CNCManager) GetTable() []byte {
+	return <-CNC_M.IsChargeTable
+}
+
+func (M *CNCManager) GetNewCncData() []byte {
+	return <-M.NewDataCncBuffer
 }
 
 func (CNC_M *CNCManager) IsConnected(index int) bool {
@@ -196,6 +262,49 @@ type CNC_JSON struct {
 		HasLight bool `json:"hasLight"`
 		RGBLight bool `json:"rgbLight"`
 	} `json:"light"`
+}
+
+func (CNC_M *CNCManager) GetMachineJson(machine *CNC.CNCCore) []byte {
+	// js := CNC_JSON{}
+	dto := machine.GetDTO()
+	CNC := CNC_JSON{
+		CNC_Name: dto.TARGET_MACHINE_NAME,
+		// Version:          dto.FIRMWARE_VERSION,
+		CncType:          getMachineTypeName(dto.MACHINE_TYPE),
+		UniqueKey:        dto.UniqueKey,
+		IsWorking:        dto.Flags.Connected,
+		ExecutingTask:    dto.Flags.ExecutingTask,
+		TypeOfConnection: dto.ConnectionData,
+		FileStorage:      dto.Memory.FileStorage,
+		StorageFilesFMT:  dto.Memory.FileStorageFMT,
+		Progress:         machine.Progress,
+		TimeRemaining:    0,
+	}
+
+	CNC.Position.X = dto.Position.X
+	CNC.Position.Y = dto.Position.Y
+	CNC.Position.Z = dto.Position.Z
+
+	CNC.Immutable.Width = dto.Immutable.Width
+	CNC.Immutable.Length = dto.Immutable.Length
+	CNC.Immutable.Height = dto.Immutable.Height
+
+	// CNC.TDP.NozzleTemp = "0 / 0"
+	// CNC.TDP.BedTemp = "0 / 0"
+	if realize := machine.Realize; realize != nil {
+		CNC.TDP = machine.Realize.GetJsonData()
+	}
+
+	CNC.Light.HasLight = dto.Switchable.Light
+	CNC.Light.RGBLight = dto.Switchable.RGB
+
+	jsonData, err := json.Marshal(CNC)
+	if err != nil {
+		log.Printf("Error marshaling CNCs to JSON: %v", err)
+		return []byte("[]")
+	}
+	return (jsonData)
+
 }
 
 func (CNC_M *CNCManager) GetJson() string {

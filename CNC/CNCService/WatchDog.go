@@ -11,7 +11,7 @@ type WatchDog struct {
 	stop     context.CancelFunc
 	WG       sync.WaitGroup
 	timer    *time.Timer
-	isStoped bool
+	isStoped chan struct{}
 }
 
 func NewWatchDog(Seconds int64, killFunc func()) *WatchDog {
@@ -41,7 +41,7 @@ func NewWatchDog(Seconds int64, killFunc func()) *WatchDog {
 				}
 			case <-ctx.Done():
 				wd.WG.Done()
-				wd.isStoped = true
+				close(wd.isStoped)
 				if !wd.timer.Stop() {
 					<-wd.timer.C
 					wd.timer.Stop()
@@ -55,7 +55,7 @@ func NewWatchDog(Seconds int64, killFunc func()) *WatchDog {
 	return wd
 }
 
-func (wd *WatchDog) Wait() bool {
+func (wd *WatchDog) Wait() chan struct{} {
 	wd.WG.Wait()
 	return wd.isStoped
 }

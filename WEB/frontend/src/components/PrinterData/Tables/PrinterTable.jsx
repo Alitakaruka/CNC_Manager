@@ -16,6 +16,36 @@ import {
 import { useLocalization } from '../../../hooks/useLocalization.jsx'
 import wsClient from '../../../hooks/WebSocketClient'
 
+function getCncUniqueKey(cnc) {
+  if (!cnc || typeof cnc !== 'object') return ''
+  return cnc.uniqueKey || cnc.UniqueKey || ''
+}
+
+function mergeCncIntoList(prev, cnc) {
+  const key = getCncUniqueKey(cnc)
+  if (!key) return prev
+  const index = prev.findIndex(c => getCncUniqueKey(c) === key)
+  if (index !== -1) {
+    const next = [...prev]
+    next[index] = { ...next[index], ...cnc }
+    return next
+  }
+  return [...prev, cnc]
+}
+
+/** Полный снимок таблицы (массив из нескольких станков) заменяет state; один объект или [один] — мерж по uniqueKey. */
+function applyPrintersWsPayload(prev, data) {
+  if (Array.isArray(data)) {
+    if (data.length === 0) return prev
+    if (data.length === 1) return mergeCncIntoList(prev, data[0])
+    return data
+  }
+  if (data && typeof data === 'object' && getCncUniqueKey(data)) {
+    return mergeCncIntoList(prev, data)
+  }
+  return prev
+}
+
 function PrintersTable({ SetNowPrinter, SetDetailsIsOpen }) {
   const [cncs, setCncs] = useState([])
   const [loading, setLoading] = useState(true)
@@ -67,28 +97,16 @@ function PrintersTable({ SetNowPrinter, SetDetailsIsOpen }) {
       wsClient.connect()
     }
 
-    // Подписка на событие с полным списком CNC станков
+    // Событие printers: полный массив станков (2+) заменяет таблицу; один объект или массив из одного — только мерж этой строки.
     const offPrinters = wsClient.on('printers', (data) => {
-      if (Array.isArray(data)) {
-        setCncs(data)
-        setLoading(false)
-      }
+      setLoading(false)
+      setCncs(prev => applyPrintersWsPayload(prev, data))
     })
 
     // Подписка на обновление отдельного CNC станка
     const offPrinterUpdate = wsClient.on('printerUpdate', (cnc) => {
-      if (cnc && cnc.uniqueKey) {
-        setCncs(prev => {
-          const index = prev.findIndex(c => c.uniqueKey === cnc.uniqueKey)
-          if (index !== -1) {
-            const updated = [...prev]
-            updated[index] = { ...updated[index], ...cnc }
-            return updated
-          } else {
-            return [...prev, cnc]
-          }
-        })
-      }
+      if (!getCncUniqueKey(cnc)) return
+      setCncs(prev => mergeCncIntoList(prev, cnc))
     })
 
     // Запрос данных при подключении WebSocket

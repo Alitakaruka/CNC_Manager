@@ -16,8 +16,9 @@ const version = "1.1.0"
 
 type Config struct {
 	Server struct {
-		Addr string `yaml:"addr"`
-		Port string `yaml:"port"`
+		Addr    string `yaml:"addr"`
+		Port    string `yaml:"port"`
+		MaxLogs int    `yaml:"maxLogs"`
 	} `yaml:"server"`
 
 	Database struct {

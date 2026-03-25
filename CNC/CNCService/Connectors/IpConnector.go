@@ -2,13 +2,12 @@ package Connectors
 
 import (
 	"context"
-	"io"
 	"net"
 	"time"
 )
 
 type IPConnector struct {
-	io.ReadWriteCloser
+	trackCloser
 	Adress string
 	Port   string
 }
@@ -26,7 +25,7 @@ func (SC *IPConnector) Connect() error {
 	if err != nil {
 		return err
 	}
-	SC.ReadWriteCloser = conn
+	SC.trackCloser.InitTracker(conn)
 	return nil
 }
 

@@ -83,6 +83,7 @@ if (
   // Try WS first
   try {
     const { wsClient } = await import('./WebSocketClient')
+    console.log("Try to connect!")
     await ensureWsReady(wsClient)
 
     const result = await wsClient.request('connect', { TypeOfConnection, ConnectionData })

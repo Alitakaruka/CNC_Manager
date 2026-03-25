@@ -17,28 +17,19 @@ import (
 var ServerFile embed.FS
 
 type CNCServer struct {
-	SecondsWork uint32
-	Connections uint32
-
-	Hub *Hub
-
-	TimerUpdader  *WSTransmiterr
-	StatusUpdader *WSTransmiterr
-	TableUpdader  *WSTransmiterr
-	LogsUpdader   *WSTransmiterr
-
-	Manager Service.CNCManagerr
+	Hub     *Hub
+	Manager Service.CNCManager
 	mux     *http.ServeMux
 	port    string
 	Adrr    string
 }
 
-func (PS *CNCServer) InitServer(port, addr, sqlPath string) {
+func (PS *CNCServer) InitServer(port, addr, sqlPath string, maxlogs int) {
 
 	PS.port = port
 	PS.Adrr = addr
 
-	PS.Hub = NewHub()
+	PS.Hub = NewHub(maxlogs)
 	go PS.Hub.Run()
 
 	Service.InitPrinters()
@@ -50,10 +41,6 @@ func (PS *CNCServer) InitServer(port, addr, sqlPath string) {
 	PS.mux.HandleFunc("/ws", PS.HandleWS)
 
 	//
-	PS.TimerUpdader = NewWSTransmiterr()
-	PS.StatusUpdader = NewWSTransmiterr()
-	PS.TableUpdader = NewWSTransmiterr()
-	PS.LogsUpdader = NewWSTransmiterr()
 }
 
 func CatchPanic(context string) {
@@ -62,20 +49,12 @@ func CatchPanic(context string) {
 	}
 }
 
-func (PS *CNCServer) CountTime() {
-	for {
-		<-time.After(time.Second)
-		PS.SecondsWork++
-	}
-}
-
 func (PS *CNCServer) Serve() {
 	defer CatchPanic("main")
 
-	go PS.CountTime()
 	go PS.UpdateLogs()
-
-	go PS.UpdateCNCTable()
+	go PS.UpdateTable()
+	go PS.UpdateCNCData()
 	go PS.UpdateStatus()
 	go PS.UpdateTimer()
 
@@ -196,68 +175,6 @@ func mainHandled(w http.ResponseWriter, r *http.Request) {
 // WEB SOCKET ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 func (PS *CNCServer) HandleWS(w http.ResponseWriter, r *http.Request) {
 	ServeWs(PS.Hub, PS.WsCallBack, w, r)
-
-	// upgrader := websocket.Upgrader{CheckOrigin: func(r *http.Request) bool {
-	// 	return true
-	// }, EnableCompression: true}
-	// WebSoc, err := upgrader.Upgrade(w, r, nil)
-	// if err != nil {
-	// 	http.Error(w, err.Error(), http.StatusBadRequest)
-	// }
-	// WebSoc.SetPingHandler(func(appdata string) error {
-	// 	return WebSoc.WriteControl(websocket.PongMessage, []byte(appdata), time.Now().Add(5))
-	// })
-	// WebSoc.SetPongHandler(func(appdata string) error {
-	// 	if appdata != "Ping" {
-	// 		return errors.New("appdata error")
-	// 	}
-	// 	return nil
-	// })
-
-	// isClose := make(chan struct{})
-	// WebSoc.SetCloseHandler(func(code int, text string) error {
-	// 	PS.Connections--
-	// 	close(isClose)
-	// 	return nil
-	// })
-	// PS.Connections++
-	// var mut sync.Mutex
-	// //Reader
-	// go func() {
-	// 	ticker := time.NewTicker(PingTime)
-
-	// 	go func() {
-	// 		for {
-	// 			select {
-	// 			case <-ticker.C:
-	// 				WebSoc.WriteControl(websocket.PingMessage, []byte("Ping"), time.Now().Add(PingTime))
-	// 				ticker.Reset(time.Second * 5)
-	// 			case <-isClose:
-	// 				return
-	// 			}
-	// 		}
-	// 	}()
-	// 	for {
-	// 		select {
-	// 		case <-isClose:
-	// 			return
-	// 		default:
-	// 			msgType, msg, err := WebSoc.ReadMessage()
-	// 			if err != nil {
-	// 				return
-	// 			}
-	// 			_ = msgType
-	// 			if msgType == websocket.TextMessage {
-	// 				Responce := PS.ExecuteWSMessage(string(msg), WebSoc)
-	// 				mut.Lock()
-	// 				WebSoc.WriteMessage(websocket.TextMessage, Responce)
-	// 				mut.Unlock()
-	// 			}
-	// 		}
-	// 	}
-	// }()
-
-	// go PS.WSWriteData(WebSoc, isClose, &mut)
 }
 
 func (PS *CNCServer) WsCallBack(client *Client, message []byte) {
@@ -267,25 +184,20 @@ func (PS *CNCServer) WsCallBack(client *Client, message []byte) {
 
 const PingTime = time.Second * 5
 
-func (PS *CNCServer) DataUpdater() {
-	go func() {
-		PS.TimerUpdader.WaitNewData()
-		PS.Hub.Send([]byte(PS.TimerUpdader.GetNowData()))
-	}()
-	go func() {
-		PS.StatusUpdader.WaitNewData()
-		PS.Hub.Send([]byte(PS.StatusUpdader.GetNowData()))
-	}()
-	go func() {
-		<-PS.Manager.IsCharge
-		cncsJson := PS.Manager.GetJson()
-		PS.Hub.Send([]byte(cncsJson))
-	}()
-	go func() {
-		PS.LogsUpdader.WaitNewData()
-		PS.Hub.Send([]byte(PS.LogsUpdader.GetNowData()))
-	}()
-}
+// func (PS *CNCServer) DataUpdater() {
+// 	go func() {
+// 		PS.TimerUpdader.WaitNewData()
+// 		PS.Hub.Send([]byte(PS.TimerUpdader.GetNowData()),false)
+// 	}()
+// 	go func() {
+// 		PS.StatusUpdader.WaitNewData()
+// 		PS.Hub.Send([]byte(PS.StatusUpdader.GetNowData()),false)
+// 	}()
+// 	go func() {
+// 		PS.LogsUpdader.WaitNewData()
+// 		PS.Hub.Send([]byte(PS.LogsUpdader.GetNowData()))
+// 	}()
+// }
 
 func (PS *CNCServer) ExecuteWSMessage(msg string) []byte {
 	var mas WSMessage
@@ -293,21 +205,18 @@ func (PS *CNCServer) ExecuteWSMessage(msg string) []byte {
 	if err != nil {
 		log.Println(err)
 	}
-
+	log.Println("WebSocket message" + msg)
 	switch mas.Type {
 	case "connect":
-		fmt.Println("Connect case")
 		con := Service.ConnectionData{}
 		json.Unmarshal(mas.Data, &con)
 		err := PS.Manager.Connect(con)
-		fmt.Println("Connection ended!")
 		if err != nil {
 			log.Printf("The device: %v, connected by %v, cant connected by reason: %v", con.ConnectionData, con.TypeOfConnection, err.Error())
 			return WEB_Socket_ERROR(mas.ReqId, err.Error())
 		}
 		return WEB_Socket_ACK(mas.ReqId, true)
 	case "reconnect":
-		fmt.Println("Reconnect case")
 		con := struct {
 			UniqueKey string `json:"uniqueKey"`
 		}{}
@@ -319,21 +228,14 @@ func (PS *CNCServer) ExecuteWSMessage(msg string) []byte {
 			return WEB_Socket_ACK(mas.ReqId, true)
 		}
 	case "GetMachines":
-		// fmt.Println("GetMachines case")
-		// PS.TableUpdader.SetNewData("") //todo костыль
-		// // cncsJson += string(bytes)
-		// PS.Manager.GetJson()
-		<-PS.Manager.IsCharge
 		cncsJson := PS.Manager.GetJson()
 		if cncsJson != "" && cncsJson != "[]" {
 			cncsMsg := fmt.Sprintf(`{"type":"printers","data":%s}`, cncsJson)
-			PS.Hub.Send([]byte(cncsMsg))
+			PS.Hub.Send([]byte(cncsMsg), false)
 		}
 
 		return WEB_Socket_ACK(mas.ReqId, true)
 	case "command":
-		fmt.Println("Command case")
-
 		Command := struct {
 			Gcode     string `json:"gcode"`
 			UniqueKey string `json:"uniqueKey"`
@@ -350,8 +252,6 @@ func (PS *CNCServer) ExecuteWSMessage(msg string) []byte {
 		return WEB_Socket_ACK(mas.ReqId, true)
 
 	case "executeTask":
-		fmt.Println("executeTask case")
-
 		task := struct {
 			UniqueKey string `json:"uniqueKey"`
 			FileName  string `json:"fileName"`
@@ -385,68 +285,54 @@ func (PS *CNCServer) ExecuteWSMessage(msg string) []byte {
 	return []byte{}
 }
 
-func (PS *CNCServer) UpdateCNCTable() {
+func (PS *CNCServer) UpdateCNCData() {
 	for {
 		// Send CNC machines data
-		<-PS.Manager.IsCharge
-		cncsJson := PS.Manager.GetJson()
-		if cncsJson != "" && cncsJson != "[]" {
-			cncsMsg := fmt.Sprintf(`{"type":"printers","data":%s}`, cncsJson)
-			PS.Hub.Send([]byte(cncsMsg))
+		Data := PS.Manager.GetNewCncData()
+		if len(Data) != 0 && string(Data) != "[]" {
+			cncsMsg := fmt.Sprintf(`{"type":"printers","data":%s}`, Data)
+			PS.Hub.Send([]byte(cncsMsg), false)
+		}
+	}
+}
+
+func (PS *CNCServer) UpdateTable() {
+	for {
+		// Send CNC machines data
+		Data := PS.Manager.GetTable()
+		if len(Data) != 0 && string(Data) != "[]" {
+			cncsMsg := fmt.Sprintf(`{"type":"printers","data":%s}`, Data)
+			PS.Hub.Send([]byte(cncsMsg), false)
 		}
 	}
 }
 
 func (PS *CNCServer) UpdateTimer() {
 	for {
-		curTime := PS.SecondsWork
-		days := curTime / 86400
-		curTime %= 86400
-		hours := curTime / 3600
-		curTime %= 3600
-		minutes := curTime / 60
-		curTime %= 60
-
+		JsonData := PS.Manager.GetTimeCharge()
 		dataSec := struct {
 			Uptime            string `json:"uptime"`
 			ActiveConnections int    `json:"activeConnections"`
-		}{Uptime: fmt.Sprintf("%dd %dh %dm", days, hours, minutes),
-			ActiveConnections: int(PS.Connections)}
+		}{Uptime: string(JsonData),
+			ActiveConnections: int(PS.Hub.ActiveUsers)}
 		jsonData, _ := json.Marshal(dataSec)
+
+		// fmt.Printf("PS.Hub.ActiveUsers: %v\n", PS.Hub.ActiveUsers)
 		resp := WSMessage{
 			Type: "systemInfo",
 			Data: jsonData,
 		}
 		res, _ := json.Marshal(resp)
-		PS.TimerUpdader.SetNewData(string(res))
-		time.Sleep(500 * time.Millisecond)
+		// fmt.Printf("res: %v\n", string(res))
+		PS.Hub.Send(res, false)
 	}
 }
 
 func (PS *CNCServer) UpdateStatus() {
 	for {
-		// Send status
-		online := 0
-		printing := 0
-		for _, machine := range PS.Manager.CNC_Machines {
-			dto := machine.GetDTO()
-			if dto.Flags.Connected {
-				online++
-				if dto.Flags.ExecutingTask {
-					printing++
-				}
-			}
-		}
-
-		statusMsg := fmt.Sprintf(
-			`{"type":"status","data":{"online":%d,"printing":%d,"offline":%d,"total":%d}}`,
-			online,
-			printing,
-			len(PS.Manager.CNC_Machines)-online,
-			len(PS.Manager.CNC_Machines),
-		)
-		PS.StatusUpdader.SetNewData(statusMsg)
-		time.Sleep(500 * time.Millisecond)
+		status := PS.Manager.GetStatus()
+		// fmt.Printf("status: %v\n", string(status))
+		PS.Hub.Send(status, false)
 	}
 }
 
@@ -457,7 +343,7 @@ func (PS *CNCServer) UpdateLogs() {
 		for _, val := range Logs {
 			js := WEB_Socket_LOG(id, uint32(time.Now().Unix()), val.Level, val.Message)
 			id++
-			PS.Hub.Send(js)
+			PS.Hub.Send(js, true)
 		}
 	}
 }

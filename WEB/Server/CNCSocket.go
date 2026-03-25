@@ -3,7 +3,6 @@ package Server
 import (
 	"bytes"
 	"encoding/json"
-	"fmt"
 	"log"
 	"net/http"
 	"sync"
@@ -44,7 +43,6 @@ func (c *Client) ReadPump(callBack func(client *Client, message []byte)) {
 
 	for {
 		_, message, err := c.conn.ReadMessage()
-		log.Printf("WS message:%v \n", string(message))
 		if err != nil {
 			if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseAbnormalClosure) {
 				log.Printf("error: %v", err)
@@ -71,23 +69,7 @@ func (c *Client) WritePump() {
 				c.conn.WriteMessage(websocket.CloseMessage, []byte{})
 				return
 			}
-
-			w, err := c.conn.NextWriter(websocket.TextMessage)
-			if err != nil {
-				return
-			}
-			w.Write(message)
-
-			// Add queued chat messages to the current websocket message.
-			n := len(c.send)
-			for i := 0; i < n; i++ {
-				w.Write([]byte{'\n'})
-				w.Write(<-c.send)
-			}
-
-			if err := w.Close(); err != nil {
-				return
-			}
+			c.WriteMessage(message)
 		case <-ticker.C:
 			c.conn.SetWriteDeadline(time.Now().Add(time.Second * 10))
 			if err := c.conn.WriteMessage(websocket.PingMessage, nil); err != nil {
@@ -116,6 +98,9 @@ func ServeWs(hub *Hub, ReadCallBackFunc func(client *Client, message []byte), w 
 }
 
 type Hub struct {
+
+	//Current active users
+	ActiveUsers int
 	//Byffer for new or reconnected clients
 	ramBuffer [][]byte
 	// Registered clients.
@@ -126,10 +111,13 @@ type Hub struct {
 	register chan *Client
 	// Unregister requests from clients.
 	unregister chan *Client
+	memlen     int
 }
 
-func NewHub() *Hub {
+func NewHub(MemoryLength int) *Hub {
+
 	return &Hub{
+		memlen:     MemoryLength,
 		ramBuffer:  make([][]byte, 0),
 		broadcast:  make(chan []byte),
 		register:   make(chan *Client),
@@ -143,9 +131,7 @@ func (h *Hub) Run() {
 		select {
 		case client := <-h.register:
 			h.clients[client] = true
-			fmt.Println("test1")
-
-			fmt.Printf("h.ramBuffer: %v\n", h.ramBuffer)
+			h.ActiveUsers++
 			for _, val := range h.ramBuffer {
 				select {
 				case client.send <- val:
@@ -155,23 +141,16 @@ func (h *Hub) Run() {
 				}
 			}
 		case client := <-h.unregister:
-			fmt.Println("test2")
-
 			if _, ok := h.clients[client]; ok {
 				delete(h.clients, client)
 				close(client.send)
 			}
 		case message := <-h.broadcast:
-			fmt.Println("test3")
-
-			h.ramBuffer = append(h.ramBuffer, message)
-			if len(h.ramBuffer) > 100 { //save last 100 massages
-				h.ramBuffer = h.ramBuffer[1:]
-			}
 			for client := range h.clients {
 				select {
 				case client.send <- message:
 				default:
+					h.ActiveUsers--
 					close(client.send)
 					delete(h.clients, client)
 				}
@@ -180,44 +159,12 @@ func (h *Hub) Run() {
 	}
 }
 
-func (h *Hub) Send(msg []byte) {
-	h.broadcast <- msg
-}
-
-type WSTransmiterr struct {
-	Data  string
-	Flag  bool
-	mutex sync.Mutex
-	cond  *sync.Cond
-}
-
-func NewWSTransmiterr() *WSTransmiterr {
-	ws := &WSTransmiterr{}
-	ws.cond = sync.NewCond(&ws.mutex)
-	return ws
-}
-
-func (ws *WSTransmiterr) WaitNewData() {
-	ws.mutex.Lock()
-	defer ws.mutex.Unlock()
-
-	old := ws.Data
-	for old == ws.Data {
-		ws.cond.Wait()
+func (h *Hub) Send(msg []byte, saveInMemory bool) {
+	h.ramBuffer = append(h.ramBuffer, msg)
+	if len(h.ramBuffer) > h.memlen { //save last 100 massages
+		h.ramBuffer = h.ramBuffer[1:]
 	}
-}
-
-func (ws *WSTransmiterr) SetNewData(data string) {
-	ws.mutex.Lock()
-	ws.Data = data
-	ws.cond.Broadcast()
-	ws.mutex.Unlock()
-}
-
-func (ws *WSTransmiterr) GetNowData() string {
-	ws.mutex.Lock()
-	defer ws.mutex.Unlock()
-	return ws.Data
+	h.broadcast <- msg
 }
 
 type WSConnection struct {
