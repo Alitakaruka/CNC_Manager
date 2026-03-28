@@ -95,7 +95,7 @@ export default function PrinterCommands({ uniqueKey }) {
 
   const quickCommands = [
     { command: 'G28', label: t('printers.commands.homeAll'), icon: Home, color: 'bg-blue-500 hover:bg-blue-600' },
-    { command: 'M84', label: t('printers.commands.disableMotors'), icon: Square, color: 'bg-red-500 hover:bg-red-600' },
+    { command: 'M18', label: t('printers.commands.disableMotors'), icon: Square, color: 'bg-red-500 hover:bg-red-600' },
   ]
 
   return (

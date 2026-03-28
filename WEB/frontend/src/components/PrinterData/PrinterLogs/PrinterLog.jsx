@@ -186,7 +186,7 @@ export default function PrinterLogs() {
         </div>
         
         <div className="flex items-center space-x-2">
-          <motion.button
+          {/* <motion.button
             onClick={loadLogs}
             disabled={isLoading}
             className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors duration-200"
@@ -194,7 +194,7 @@ export default function PrinterLogs() {
             whileTap={{ scale: 0.95 }}
           >
             <RefreshCw className={`h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} />
-          </motion.button>
+          </motion.button> */}
           
           <motion.button
             onClick={exportLogs}

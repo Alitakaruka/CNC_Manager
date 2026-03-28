@@ -22,22 +22,23 @@ var MachinesTypes = map[int]string{
 }
 
 const (
-	EndOfData          = "\r\n" // ";"
-	StopPrint          = "!_"   // "!_"
-	GetAllInformation  = "#_"   // "#_"
-	CheckConnection    = "%_"   // "%_"
-	GetBaseInformation = "&_"   // "&_"
-	Check              = "*_"   // "*_"
-	NowTemperatureBed  = "B_"   // "B_"
-	TemperatureNozzle  = "N_"   // "N_"
-	IsPrinting         = "P_"   // "P_"
-	ReadyToRead        = "R_"   // "R_"
-	BufferCommandSize  = "S_"   // "S_"
-	ItsGcodeCommand    = "G_"   // "G_"
-	ClearBuffer        = "C_"   // "C_"
-	SetLightStatus     = "L_"   // "L_"
+	EndOfData = "\r\n" // ";"
+//	StopPrint          = "!_"   // "!_"
+//	GetAllInformation  = "#_"   // "#_"
+//	CheckConnection    = "%_"   // "%_"
+//	GetBaseInformation = "&_"   // "&_"
+//	Check              = "*_"   // "*_"
+//	NowTemperatureBed  = "B_"   // "B_"
+//	TemperatureNozzle  = "N_"   // "N_"
+//	IsPrinting         = "P_"   // "P_"
+//	ReadyToRead        = "R_"   // "R_"
+//	BufferCommandSize  = "S_"   // "S_"
+//	ItsGcodeCommand    = "G_"   // "G_"
+//	ClearBuffer        = "C_"   // "C_"
+//	SetLightStatus     = "L_"   // "L_"
+//
+// )
 )
-
 const (
 	MyTemperatureN = "N:"          // "N_"
 	MyTemperatureB = "B:"          // "B_"
@@ -70,16 +71,6 @@ const (
 // Immutable
 const (
 	WIFI = "WIFI:"
-)
-
-const (
-	ErrMemoryAlloc      = 32 // "0x01"
-	ErrParseCommand     = 33 // "0x02"
-	ErrUndefinedCommand = 34 // "0x03"
-	ErrOutOfRange       = 35 // "0x04"
-	ErrBufferOverflow   = 36 // "0x05"
-	ErrTXBufferOverflow = 37 // "0x06"
-	ErrRXBufferOverflow = 38 // "0x07"
 )
 
 const (

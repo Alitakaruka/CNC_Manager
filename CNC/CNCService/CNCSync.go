@@ -1,7 +1,6 @@
 package CNCService
 
 import (
-	"fmt"
 	"io"
 	"log"
 	"sync"
@@ -28,9 +27,9 @@ func (T *Transmitter) ACK() {
 	if len(T.Commands) == 0 {
 		return
 	}
-	fmt.Printf("T.CurrentFreeBytes: %v\n", T.CurrentFreeBytes)
+	// fmt.Printf("T.CurrentFreeBytes: %v\n", T.CurrentFreeBytes)
 	T.mutex.Lock()
-	fmt.Println("ACK")
+	// fmt.Println("ACK")
 	val := T.Commands[0]
 	T.CurrentFreeBytes += val
 	T.Commands = T.Commands[1:]

@@ -1,8 +1,8 @@
 package Connectors
 
 import (
+	"fmt"
 	"io"
-	"log"
 	"sync"
 )
 
@@ -32,11 +32,6 @@ func (t *trackCloser) InitTracker(rwc io.ReadWriteCloser) {
 func (t *trackCloser) Read(p []byte) (int, error) {
 	t.Rmu.Lock()
 	n, err := t.ReadWriteCloser.Read(p)
-	// log.Printf("i read: %v\n", string(p))
-	if err == io.EOF {
-		log.Println("EOF")
-		t.Close()
-	}
 	t.Rmu.Unlock()
 	return n, err
 }
@@ -46,18 +41,16 @@ func (t *trackCloser) Write(p []byte) (int, error) {
 
 	t.Wmu.Lock()
 	n, err := t.ReadWriteCloser.Write(p)
-	// log.Printf("i write: %v\n", string(p))
-	if err != nil {
-		t.Close()
-	}
 	t.Wmu.Unlock()
 	return n, err
 }
 
 // Close проксирует Close и закрывает канал только один раз
 func (t *trackCloser) Close() error {
+	fmt.Println("Close")
 	var err error
 	err = t.ReadWriteCloser.Close()
+	fmt.Println("Rw closer")
 	t.once.Do(func() {
 		close(t.closed) // уведомляем всех, кто ждет
 	})

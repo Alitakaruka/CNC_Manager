@@ -128,6 +128,7 @@ export default function Details({ PrinterData, SetDetailsIsOpen }) {
   const controlsDisabled = !isWorking
 
   const handleStartTask = async () => {
+    console.log("handleStartTask");
     if (controlsDisabled) {
       return
     }
@@ -145,7 +146,7 @@ export default function Details({ PrinterData, SetDetailsIsOpen }) {
 
     try {
       const file = fileRef.current.files[0]
-      
+      console.log(file);
       // Try WebSocket first
     // Try WebSocket first
   if (wsClient.connected) {

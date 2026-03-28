@@ -8,6 +8,7 @@ import (
 	"log"
 	"strconv"
 	"strings"
+	"sync"
 )
 
 const (
@@ -20,6 +21,7 @@ const (
 type FDMPrinterData struct {
 	Core *CNC.CNCCore
 
+	mut       sync.Mutex
 	Extruder1 struct {
 		CurTemp  int
 		NeedTemp int
@@ -40,10 +42,6 @@ func (FDM *FDMPrinterData) SetCore(core *CNC.CNCCore) {
 	FDM.Core = core
 }
 
-// func (FDM *FDMPrinterData) GetCore() *CNC.CNCCore {
-// 	return FDM.Core
-// }
-
 func (FDM *FDMPrinterData) InitRealization() error {
 	FDM.Core.WriteLog(CNCService.LogLevelInformation, "Init!")
 	FDM.Fans = make(map[int]uint8)
@@ -57,6 +55,7 @@ func (FDM *FDMPrinterData) GetJsonData() any {
 		Fans       map[int]uint8 `json:"fans"`
 	}
 
+	FDM.mut.Lock()
 	jsonData.NozzleTemp = strconv.Itoa(FDM.Extruder1.CurTemp) + " / " + strconv.Itoa(FDM.Extruder1.NeedTemp)
 	jsonData.BedTemp = strconv.Itoa(FDM.Bed.CurTemp) + " / " + strconv.Itoa(FDM.Bed.NeedTemp)
 
@@ -64,19 +63,20 @@ func (FDM *FDMPrinterData) GetJsonData() any {
 	for k, v := range FDM.Fans {
 		jsonData.Fans[k] = v
 	}
+	FDM.mut.Unlock()
 	return jsonData
 }
 
-func Delete_comments(command string) string {
-	strArr := strings.Split(command, ";")
-	if len(strArr) == 0 {
-		command = strings.TrimSpace(command)
-	}
-	if len(strArr) >= 2 {
-		return strings.TrimSpace(strArr[0])
-	}
-	return command
-}
+// func Delete_comments(command string) string {
+// 	strArr := strings.Split(command, ";")
+// 	if len(strArr) == 0 {
+// 		command = strings.TrimSpace(command)
+// 	}
+// 	if len(strArr) >= 2 {
+// 		return strings.TrimSpace(strArr[0])
+// 	}
+// 	return command
+// }
 
 func (FDM *FDMPrinterData) CheckTemps() {
 	// FDM.
@@ -91,6 +91,8 @@ func (P *FDMPrinterData) ExecuteTask(file []byte, ctx context.Context) {
 		select {
 		case <-ctx.Done():
 			return
+		case <-P.Core.IsClose:
+			return
 		default:
 			res := CNCService.DeleteComments_GCode(Data)
 
@@ -104,10 +106,8 @@ func (P *FDMPrinterData) ExecuteTask(file []byte, ctx context.Context) {
 			if res == "" || res == CNCService.EndOfData {
 				continue
 			}
-			if ok := P.Core.SendMessage([]byte(res + CNCService.EndOfData)); !ok {
-				P.Core.WriteLog(CNCService.LogLevelError, "Printing aborted! Command cant send!")
-				return
-			}
+			P.Core.SendMessage([]byte(res + CNCService.EndOfData))
+
 			CurrentCommands++
 			P.Core.Progress = (CurrentCommands / MaxCommands) * 100
 		}
@@ -171,7 +171,6 @@ func (FDM *FDMPrinterData) ParseCommand(Prefix, dataStr string) {
 		// 	FDM.WriteLog(CNCService.LogLevelError, err.Error())
 		// }
 	case FanSpeedPref:
-
 		var index int
 		var value uint8
 		_, err := fmt.Sscanf(Prefix+dataStr, FanSpeed, &index, &value)
@@ -180,7 +179,11 @@ func (FDM *FDMPrinterData) ParseCommand(Prefix, dataStr string) {
 			FDM.Core.WriteLog(CNCService.LogLevelError, err.Error())
 		}
 		if FDM.Fans != nil {
+			FDM.mut.Lock()
+
 			FDM.Fans[index] = uint8(value)
+			FDM.mut.Unlock()
+
 		}
 	}
 }

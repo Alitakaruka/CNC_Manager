@@ -24,6 +24,7 @@ type CNCManager struct {
 	TimeIsCharged    chan []byte
 	NewDataCncBuffer chan []byte
 	IsStatusCharge   chan []byte
+	Logs             chan CNCService.Log
 
 	online  int
 	ofline  int
@@ -39,6 +40,7 @@ func (CNC_M *CNCManager) InitManager(sqlPath string) {
 	CNC_M.TimeIsCharged = make(chan []byte)
 	CNC_M.NewDataCncBuffer = make(chan []byte, 100)
 	CNC_M.IsStatusCharge = make(chan []byte)
+	CNC_M.Logs = make(chan CNCService.Log, 128)
 
 	//TimerUpgrade
 	go func() {
@@ -122,7 +124,8 @@ func (CNC_M *CNCManager) Connect(conData ConnectionData) error {
 		newCNC.SetDTO(dto)
 		CNC_M.CNC_Machines = append(CNC_M.CNC_Machines, newCNC)
 
-		go CNC_M.UpdateJsonData(newCNC)
+		go CNC_M.UpdateMachineData(newCNC)
+
 		CNC_M.IsChargeTable <- []byte(CNC_M.GetJson())
 		go newCNC.CNCStart()
 
@@ -133,11 +136,15 @@ func (CNC_M *CNCManager) Connect(conData ConnectionData) error {
 	}
 }
 
+func (CNC_M *CNCManager) UpdateLogs() {
+
+}
+
 func (CNC_M *CNCManager) GetTimeCharge() []byte {
 	return <-CNC_M.TimeIsCharged
 }
 
-func (CNC_M *CNCManager) UpdateJsonData(Machine *CNC.CNCCore) {
+func (CNC_M *CNCManager) UpdateMachineData(Machine *CNC.CNCCore) {
 	CNC_M.online++
 	CNC_M.chargeStatus()
 	for {
@@ -145,11 +152,16 @@ func (CNC_M *CNCManager) UpdateJsonData(Machine *CNC.CNCCore) {
 		case <-Machine.IsCharge:
 			json := CNC_M.GetMachineJson(Machine)
 			CNC_M.NewDataCncBuffer <- json
+
+		case log := <-Machine.Logs:
+			CNC_M.Logs <- log
 		case <-Machine.IsClose:
 			CNC_M.online--
 			CNC_M.chargeStatus()
 			CNC_M.NewDataCncBuffer <- CNC_M.GetMachineJson(Machine)
 			return
+			// default:
+
 		}
 	}
 }
@@ -361,13 +373,8 @@ func getMachineTypeName(machineType int) string {
 	return "Unknown"
 }
 
-func (CNC_M *CNCManager) GetAllLogs() []CNCService.Log {
-	result := make([]CNCService.Log, 0)
-	for _, CNC := range CNC_M.CNC_Machines {
-		Logs := CNC.GetLogs()
-		result = append(result, Logs...)
-	}
-	return result
+func (CNC_M *CNCManager) GetLog() CNCService.Log {
+	return <-CNC_M.Logs
 }
 
 func (CNC_M *CNCManager) SendGCode(GCode, Key string) error {

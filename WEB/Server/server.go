@@ -339,11 +339,9 @@ func (PS *CNCServer) UpdateStatus() {
 func (PS *CNCServer) UpdateLogs() {
 	id := uint32(1)
 	for {
-		Logs := PS.Manager.GetAllLogs()
-		for _, val := range Logs {
-			js := WEB_Socket_LOG(id, uint32(time.Now().Unix()), val.Level, val.Message)
-			id++
-			PS.Hub.Send(js, true)
-		}
+		Log := PS.Manager.GetLog()
+		js := WEB_Socket_LOG(id, uint32(time.Now().Unix()), Log.Level, Log.Message)
+		id++
+		PS.Hub.Send(js, true)
 	}
 }

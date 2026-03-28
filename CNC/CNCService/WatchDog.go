@@ -2,14 +2,14 @@ package CNCService
 
 import (
 	"context"
-	"sync"
+	"fmt"
 	"time"
 )
 
 type WatchDog struct {
-	ttl      int64
-	stop     context.CancelFunc
-	WG       sync.WaitGroup
+	ttl  int64
+	stop context.CancelFunc
+	// WG       sync.WaitGroup
 	timer    *time.Timer
 	isStoped chan struct{}
 }
@@ -17,13 +17,11 @@ type WatchDog struct {
 func NewWatchDog(Seconds int64, killFunc func()) *WatchDog {
 
 	wd := &WatchDog{
-		ttl: Seconds,
+		ttl:      Seconds,
+		isStoped: make(chan struct{}),
 	}
 
 	ctx, fn := context.WithCancel(context.Background())
-
-	wd.WG = sync.WaitGroup{}
-	wd.WG.Add(1)
 	wd.stop = fn
 
 	wd.timer = time.NewTimer(time.Second * time.Duration(Seconds))
@@ -31,16 +29,11 @@ func NewWatchDog(Seconds int64, killFunc func()) *WatchDog {
 		for {
 			select {
 			case <-wd.timer.C:
-				if killFunc != nil {
-					wd.WG.Done()
-					killFunc()
-					return
-				} else {
-					wd.WG.Done()
-					return
-				}
+				close(wd.isStoped)
+				return
 			case <-ctx.Done():
-				wd.WG.Done()
+				fmt.Println("WD stop!")
+				// wd.WG.Done()
 				close(wd.isStoped)
 				if !wd.timer.Stop() {
 					<-wd.timer.C
@@ -56,15 +49,19 @@ func NewWatchDog(Seconds int64, killFunc func()) *WatchDog {
 }
 
 func (wd *WatchDog) Wait() chan struct{} {
-	wd.WG.Wait()
 	return wd.isStoped
 }
 
 func (wd *WatchDog) Alive() {
+	// log.Println(string(debug.Stack()))
+	// log.Println("alive")
 	wd.timer.Reset(time.Second * time.Duration(wd.ttl))
 }
 
 func (wd *WatchDog) Close() {
 	wd.Alive()
-	wd.stop()
+	// wd.WG.Done()
+	if wd.stop != nil {
+		wd.stop()
+	}
 }
