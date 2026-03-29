@@ -362,11 +362,11 @@ func (cnc *CNCCore) SendMessage(message []byte) {
 	if cnc.Transmitter.Wait(len(message)) {
 		cnc.Transmitter.Trainsmit(len(message))
 		_, ex := cnc.Connection.Write(message)
-		if len(message) > 0 {
-			log.Printf("I send:%v", string(message))
-			fmt.Printf("cnc.Transmitter.CurrentFreeBytes: %v\n", cnc.Transmitter.CurrentFreeBytes)
-			fmt.Printf("cnc.Transmitter.MaxBytes: %v\n", cnc.Transmitter.MaxBytes)
-		}
+		// if len(message) > 0 {
+		// 	// log.Printf("I send:%v", string(message))
+		// 	// fmt.Printf("cnc.Transmitter.CurrentFreeBytes: %v\n", cnc.Transmitter.CurrentFreeBytes)
+		// 	// fmt.Printf("cnc.Transmitter.MaxBytes: %v\n", cnc.Transmitter.MaxBytes)
+		// }
 		if ex != nil {
 			cnc.CloseConnection()
 			cnc.WriteLog(CNCService.LogLevelError, ex.Error())
