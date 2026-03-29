@@ -1,5 +1,5 @@
 
 
-git add .
-git commit -m "Next"
-git push MainServer
+git add . ;
+git commit -m "Next";
+git push MainServer;
