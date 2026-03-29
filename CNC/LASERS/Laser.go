@@ -5,7 +5,7 @@ import (
 )
 
 type Laser struct {
-	CNC.CNCCore
+	Core *CNC.CNCCore
 }
 
 func InitStandartLaser() {
@@ -16,7 +16,7 @@ func InitStandartLaser() {
 }
 
 func (L *Laser) SetCore(core *CNC.CNCCore) {
-	L.CNCCore = *core
+	L.Core = core
 }
 
 func (L *Laser) InitRealization() error {
