@@ -51,7 +51,7 @@ const (
 
 	Error            = "Error:"
 	Warning          = "Warning:"
-	Information      = "Info:"
+	Information      = "Information:"
 	Success          = "Success:"
 	MyWidth          = "M_Width:"  // "W_"
 	MyLength         = "M_Length:" // "L_"

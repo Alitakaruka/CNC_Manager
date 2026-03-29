@@ -1,0 +1,1 @@
+ssh server@192.168.8.2 "pkill CNC_Manager || true  && cd ~/repos/CNC_Manager && ./CNC_Manager && exit"

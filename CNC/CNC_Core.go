@@ -581,17 +581,16 @@ func (cnc *CNCCore) parseCommand(Command string) {
 		cnc.DTO.Switchable.Light = (dataInt == 1)
 	case CNCService.Error:
 		cnc.WriteLog(CNCService.LogLevelError, dataStr)
-		cnc.LogFile.Write([]byte(time.Now().Format("dd.mm.yy") + "  Error:" + dataStr + "\n"))
+		// cnc.LogFile.Write([]byte(time.Now().Format("dd.mm.yy") + "  Error:" + dataStr + "\n"))
 	case CNCService.Warning:
 		cnc.WriteLog(CNCService.LogLevelWarning, dataStr)
-		cnc.LogFile.Write([]byte(time.Now().Format("dd.mm.yy") + ":  Warning:" + dataStr + "\n"))
+		// cnc.LogFile.Write([]byte(time.Now().Format("dd.mm.yy") + ":  Warning:" + dataStr + "\n"))
 	case CNCService.Information:
 		cnc.LogFile.Write([]byte(time.Now().Format("dd.mm.yy") + "  Info:" + dataStr + "\n"))
-		cnc.WriteLog(CNCService.LogLevelInformation, dataStr)
+		// cnc.WriteLog(CNCService.LogLevelInformation, dataStr)
 	case CNCService.Success:
-
 		// log.Println("Succses log!")
-		cnc.LogFile.Write([]byte(time.Now().Format("dd.mm.yy") + "  Success:" + dataStr + "\n"))
+		// cnc.LogFile.Write([]byte(time.Now().Format("dd.mm.yy") + "  Success:" + dataStr + "\n"))
 		cnc.WriteLog(CNCService.LogLevelSuccess, dataStr)
 	case CNCService.MyBufferLen:
 		cnc.Transmitter.SetLimits(dataInt, dataInt)
