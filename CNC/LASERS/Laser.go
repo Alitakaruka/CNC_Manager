@@ -2,7 +2,6 @@ package laser
 
 import (
 	"CNCManager/CNC"
-	"context"
 )
 
 type Laser struct {
@@ -30,7 +29,7 @@ func (L *Laser) GetJsonData() any {
 	return ""
 }
 
-func (L *Laser) ExecuteTask(file []byte, ctx context.Context) {
+func (L *Laser) ExecuteTask(file []byte) {
 	// L.WriteLog(CNCService.LogLevelInformation, "start printing!")
 	// for _, Data := range L.WorkFile {
 	// 	select {

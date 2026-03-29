@@ -37,7 +37,7 @@ func (c *Client) ReadPump(callBack func(client *Client, message []byte)) {
 		c.hub.unregister <- c
 		c.conn.Close()
 	}()
-	c.conn.SetReadLimit(1024)
+	// c.conn.SetReadLimit(1024)
 	c.conn.SetReadDeadline(time.Now().Add(60 * time.Second))
 	c.conn.SetPongHandler(func(string) error { c.conn.SetReadDeadline(time.Now().Add(60 * time.Second)); return nil })
 

@@ -47,6 +47,7 @@ func GetConfig(path string) *Config {
 func InitPrinters() {
 	AtmegaPrinter.InitAtmegaPrinter()
 	laser.InitStandartLaser()
+
 	//TODO: other printers
 }
 

@@ -5,7 +5,6 @@ import (
 	"CNCManager/CNC/CNCService/Connectors"
 	"bufio"
 	"bytes"
-	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -23,7 +22,7 @@ const BaseTimeout = 11
 
 type RealizeCNC interface {
 	// AnyCNC
-	ExecuteTask(file []byte, ctx context.Context)
+	ExecuteTask(file []byte)
 	ParseCommand(Prefix, dataStr string)
 	InitRealization() error
 	GetJsonData() any
@@ -58,13 +57,20 @@ type CNCCore struct {
 	//Flags
 	// isInitEnd bool
 
-	IsCharge chan struct{}
-	IsClose  chan struct{}
-	Logs     chan CNCService.Log
+	//events
+	IsCharge  chan struct{}
+	IsClose   chan struct{}
+	IsTaskEnd chan struct{}
+
+	Logs chan CNCService.Log
 }
 
 func NewCNCCore(IsChargeUse bool) *CNCCore {
-	Core := CNCCore{IsCharge: make(chan struct{}, 1), ReceiveBuffer: make(chan byte, 1024), Logs: make(chan CNCService.Log, 1024), IsClose: make(chan struct{}, 1)}
+	Core := CNCCore{IsCharge: make(chan struct{}, 1),
+		ReceiveBuffer: make(chan byte, 1024),
+		Logs:          make(chan CNCService.Log, 1024),
+		IsClose:       make(chan struct{}, 1),
+		IsTaskEnd:     make(chan struct{})}
 	return &Core
 }
 
@@ -100,38 +106,25 @@ type CNC_DTO struct {
 	MACHINE_TYPE        int    `json:"MACHINE_TYPE"`
 	FIRMWARE_VERSION    string `json:"FIRMWARE_VERSION"`
 	UniqueKey           string `json:"UniqueKey"`
-	ConnectionData      string `json:"ConnectionData"`
-	ConnectionString    string `json:"-"`
+	ConnectionData      string `json:"ConnectionData`
+
+	ConnectionString string `json:"-"`
 }
 
 func (cnc *CNCCore) StartTask(file []byte) error {
 
-	cntx, cancel := context.WithCancel(context.Background())
+	// cntx, cancel := context.WithCancel(context.Background())
 	go func() {
 		cnc.mutex.Lock()
 		dto := cnc.GetDTO()
 		dto.Flags.ExecutingTask = true
 		cnc.SetDTO(dto)
 		cnc.mutex.Unlock()
-
-		cnc.Realize.ExecuteTask(file, cntx)
-
-		if cnc.CanExecuteTask() {
-			cnc.WriteLog(CNCService.LogLevelSuccess, "Task executing successeful!")
-		} else {
-			cnc.WriteLog(CNCService.LogLevelError, "Task failed successfully!")
-		}
-		cnc.mutex.Lock()
-		dto.Flags.ExecutingTask = false
-		cnc.SetDTO(dto)
-		cnc.mutex.Unlock()
+		cnc.Realize.ExecuteTask(file)
 	}()
 	time.Sleep(time.Millisecond * 10) //stub
 	go func() {
-		for cnc.CanExecuteTask() {
-			time.Sleep(time.Millisecond * 100)
-		}
-		cancel()
+		<-cnc.IsTaskEnd
 		cnc.WriteLog(CNCService.LogLevelInformation, "End of executing task!")
 	}()
 
@@ -258,12 +251,12 @@ func (cnc *CNCCore) WriteLog(logLevel, Log string) {
 	cnc.modifyCharge()
 }
 
-func (cnc *CNCCore) CanExecuteTask() bool {
-	cnc.mutex.RLock()
-	can := cnc.DTO.Flags.Connected && cnc.DTO.Flags.ExecutingTask
-	cnc.mutex.RUnlock()
-	return can
-}
+// func (cnc *CNCCore) CanExecuteTask() bool {
+// 	cnc.mutex.RLock()
+// 	can := cnc.DTO.Flags.Connected && cnc.DTO.Flags.ExecutingTask
+// 	cnc.mutex.RUnlock()
+// 	return can
+// }
 
 func (cnc *CNCCore) readConnectionAsync() {
 	// cnc.ReceiveBuffer = cnc.ReceiveBuffer[:0]

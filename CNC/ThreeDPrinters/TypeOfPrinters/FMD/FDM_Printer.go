@@ -3,7 +3,6 @@ package FDM_Printer
 import (
 	"CNCManager/CNC"
 	"CNCManager/CNC/CNCService"
-	"context"
 	"fmt"
 	"log"
 	"strconv"
@@ -82,15 +81,13 @@ func (FDM *FDMPrinterData) CheckTemps() {
 	// FDM.
 }
 
-func (P *FDMPrinterData) ExecuteTask(file []byte, ctx context.Context) {
+func (P *FDMPrinterData) ExecuteTask(file []byte) {
 	P.Core.WriteLog(CNCService.LogLevelInformation, "start printing!")
 	data := strings.Split(string(file), "\n")
 	MaxCommands := len(data)
 	CurrentCommands := 0
 	for _, Data := range data {
 		select {
-		case <-ctx.Done():
-			return
 		case <-P.Core.IsClose:
 			return
 		default:
@@ -112,6 +109,7 @@ func (P *FDMPrinterData) ExecuteTask(file []byte, ctx context.Context) {
 			P.Core.Progress = (CurrentCommands / MaxCommands) * 100
 		}
 	}
+	P.Core.IsTaskEnd <- struct{}{}
 }
 
 func SkipHeatingCommands(gcode string) string {
