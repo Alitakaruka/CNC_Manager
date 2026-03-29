@@ -106,7 +106,7 @@ type CNC_DTO struct {
 	MACHINE_TYPE        int    `json:"MACHINE_TYPE"`
 	FIRMWARE_VERSION    string `json:"FIRMWARE_VERSION"`
 	UniqueKey           string `json:"UniqueKey"`
-	ConnectionData      string `json:"ConnectionData`
+	ConnectionData      string `json:"ConnectionData"`
 
 	ConnectionString string `json:"-"`
 }
