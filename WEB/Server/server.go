@@ -178,7 +178,7 @@ func (PS *CNCServer) HandleWS(w http.ResponseWriter, r *http.Request) {
 }
 
 func (PS *CNCServer) WsCallBack(client *Client, message []byte) {
-	Responce := PS.ExecuteWSMessage(string(message))
+	Responce := PS.ExecuteWSMessage(message)
 	client.WriteMessage(Responce)
 }
 
@@ -199,13 +199,13 @@ const PingTime = time.Second * 5
 // 	}()
 // }
 
-func (PS *CNCServer) ExecuteWSMessage(msg string) []byte {
+func (PS *CNCServer) ExecuteWSMessage(msg []byte) []byte {
 	var mas WSMessage
 	err := json.Unmarshal([]byte(msg), &mas)
 	if err != nil {
 		log.Println(err)
 	}
-	log.Println("WebSocket message" + msg)
+	// log.Println("WebSocket message" + msg)
 	switch mas.Type {
 	case "connect":
 		con := Service.ConnectionData{}
