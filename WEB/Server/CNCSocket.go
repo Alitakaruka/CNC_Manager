@@ -160,9 +160,11 @@ func (h *Hub) Run() {
 }
 
 func (h *Hub) Send(msg []byte, saveInMemory bool) {
-	h.ramBuffer = append(h.ramBuffer, msg)
-	if len(h.ramBuffer) > h.memlen { //save last 100 massages
-		h.ramBuffer = h.ramBuffer[1:]
+	if saveInMemory {
+		h.ramBuffer = append(h.ramBuffer, msg)
+		if len(h.ramBuffer) > h.memlen { //save last 100 massages
+			h.ramBuffer = h.ramBuffer[1:]
+		}
 	}
 	h.broadcast <- msg
 }

@@ -8,11 +8,11 @@ import (
 	"log"
 )
 
-type PrinterRepository struct {
+type CNCRepository struct {
 	Db *sql.DB
 }
 
-func (PR *PrinterRepository) InitRepository(sqlPath string) error {
+func (PR *CNCRepository) InitRepository(sqlPath string) error {
 	db, ex := sql.Open("sqlite", "file:"+sqlPath)
 	if ex != nil {
 		PR.Db = nil
@@ -26,36 +26,39 @@ func (PR *PrinterRepository) InitRepository(sqlPath string) error {
 
 	res, ex := db.Prepare(`CREATE TABLE IF NOT EXISTS Machines(
 	id INTEGER PRIMARY KEY AUTOINCREMENT,
-	UniqueKey     	 TEXT NOT NULL,
-	MACHINE_TYPE 	 INTEGER NOT NULL,
-	TARGET_MACHINE_NAME  TEXT NOT NULL,
-	Device_Chip_Name  TEXT NOT NULL,
-	ConnectionString   TEXT NOT NULL,
-	ConnectionData TEXT NOT NULL
+	machineType 	 INTEGER NOT NULL,
+	chip  TEXT,
+	customName  TEXT,
+	connectionType   TEXT,
+	connectionData TEXT,
+	firmwate INTEGER.
 	)`)
 	if ex != nil {
 		return ex
 	}
 	res.Exec()
 
-	// //Later
-	// res, err := db.Prepare(`CREATE TABLE IF NOT EXIST CNCSettings(
-	// 	FOREIGN KEY(CNC_id) REFERENCES Machines(id),
-	// 	Width INTEGER NOT NULL,
-	// 	Length INTEGER NOT NULL,
-	// 	Height INTEGER NOT NULL,
+	res, ex = db.Prepare(`CREATE TABLE IF NOT EXIST Settings(
+	id INTEGER PRIMARY KEY AUTOUNCREMENT,
+	deviceId INTEGER NOT NULL,
+	uniqueKey TEXT NOT NULL,
+	x_step_mm INTEGER,
+	y_step_mm INTEGER,
+	z_step_mm INTEGER,
+	e_step_mm INTEGER,
+	z_offset  INTEGER
+	)`)
 
-	// )`)
+	if ex != nil {
+		return ex
+	}
+	res.Exec()
 
-	// if err != nil {
-	// 	log.Println(err)
-	// 	return err
-	// }
 	PR.Db = db
 	return nil
 }
 
-func (PR *PrinterRepository) AddMachine(CNC *CNC.CNCCore) error {
+func (PR *CNCRepository) AddMachine(CNC *CNC.CNCCore) error {
 	if PR.Db == nil {
 		return errors.New("null database")
 	}
@@ -88,7 +91,7 @@ func (PR *PrinterRepository) AddMachine(CNC *CNC.CNCCore) error {
 	return nil
 }
 
-func (PR *PrinterRepository) FindMachine(CNC *CNC.CNCCore) bool {
+func (PR *CNCRepository) FindMachine(CNC *CNC.CNCCore) bool {
 	if PR.Db == nil {
 		return false
 	}
@@ -124,7 +127,7 @@ func (PR *PrinterRepository) FindMachine(CNC *CNC.CNCCore) bool {
 	return true
 }
 
-func (PR *PrinterRepository) GetAllMachines() []*CNC.CNCCore {
+func (PR *CNCRepository) GetAllMachines() []*CNC.CNCCore {
 	var result = make([]*CNC.CNCCore, 0)
 
 	if PR.Db == nil {
@@ -185,7 +188,7 @@ func (PR *PrinterRepository) GetAllMachines() []*CNC.CNCCore {
 }
 
 // TODO
-func (PR *PrinterRepository) DeletePrinter(CNC *CNC.CNCCore) error {
+func (PR *CNCRepository) DeletePrinter(CNC *CNC.CNCCore) error {
 	if PR.Db == nil {
 		return errors.New("")
 	}

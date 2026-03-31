@@ -169,7 +169,6 @@ func (cnc *CNCCore) readResponces() {
 
 func (cnc *CNCCore) StartWatchcDog() {
 	cnc.WatchDog = CNCService.NewWatchDog(11, nil)
-	log.Println("WD start!")
 	for {
 		select {
 		case <-cnc.WatchDog.Wait():
@@ -202,8 +201,8 @@ func (cnc *CNCCore) InitDevice() error {
 	fmt.Println("Stop ident!")
 
 	res := string(Data)
-	fmt.Printf("res: %v\n", res)
-	fmt.Printf("res: %v\n", []byte(res))
+	// fmt.Printf("res: %v\n", res)
+	// fmt.Printf("res: %v\n", []byte(res))
 	if res == "" {
 		err := cnc.Connection.Close()
 		if err != nil {
@@ -540,6 +539,7 @@ func (cnc *CNCCore) modifyCharge() {
 
 func (cnc *CNCCore) parseCommand(Command string) {
 	// Command = strings.TrimSpace(Command)
+	Copy := cnc.GetDTO()
 	Command, _ = strings.CutSuffix(Command, CNCService.EndOfData)
 	if len(Command) == 0 {
 		return
@@ -601,5 +601,7 @@ func (cnc *CNCCore) parseCommand(Command string) {
 			cnc.Realize.ParseCommand(prefix, dataStr)
 		}
 	}
-	cnc.modifyCharge()
+	if Copy == cnc.GetDTO() {
+		cnc.modifyCharge()
+	}
 }

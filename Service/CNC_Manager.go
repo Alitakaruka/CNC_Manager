@@ -32,7 +32,7 @@ type CNCManager struct {
 	total   int
 
 	CNC_Machines []*CNC.CNCCore
-	DataBase     DataBase.PrinterRepository
+	DataBase     DataBase.CNCRepository
 }
 
 func (CNC_M *CNCManager) InitManager(sqlPath string) {
