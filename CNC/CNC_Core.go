@@ -341,6 +341,7 @@ func (cnc *CNCCore) getNextByteStream() []byte {
 		case <-cnc.IsClose:
 			return nil
 		case b := <-cnc.ReceiveBuffer:
+			fmt.Println(b)
 			result = append(result, b)
 			if bytes.HasSuffix(result, []byte(CNCService.EndOfData)) {
 				return result
