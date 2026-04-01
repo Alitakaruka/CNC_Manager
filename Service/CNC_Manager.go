@@ -102,38 +102,36 @@ func (CNC_M *CNCManager) Connect(conData ConnectionData) error {
 		} else {
 			return CNC_M.reconect(index)
 		}
-	} else {
-
-		newCNC, ex := CNC.Connect(conData.TypeOfConnection, conData.ConnectionData)
-		log.Printf("Connected by type %v, data: %v\n", conData.TypeOfConnection, conData.ConnectionData)
-		if ex != nil {
-			return ex
-		}
-		err := newCNC.InitDevice()
-
-		if err != nil {
-			log.Printf("Device init error:%v", err)
-			newCNC.CloseConnection()
-			return err
-		}
-		// Get DTO and set unique key if not set
-		dto := newCNC.GetDTO()
-		if dto.UniqueKey == "" {
-			dto.UniqueKey = CNC_M.GenerateUniqueKey()
-		}
-		newCNC.SetDTO(dto)
-		CNC_M.CNC_Machines = append(CNC_M.CNC_Machines, newCNC)
-
-		go CNC_M.UpdateMachineData(newCNC)
-
-		CNC_M.IsChargeTable <- []byte(CNC_M.GetJson())
-		go newCNC.CNCStart()
-
-		log.Println("New cnc start success!")
-		newCNC.WriteLog(CNCService.LogLevelSuccess, "Successfully connected")
-
-		return nil
 	}
+	newCNC, ex := CNC.Connect(conData.TypeOfConnection, conData.ConnectionData)
+	// log.Printf("Connected by type %v, data: %v\n", conData.TypeOfConnection, conData.ConnectionData)
+	if ex != nil {
+		return ex
+	}
+	err := newCNC.InitDevice()
+
+	if err != nil {
+		// log.Printf("Device init error:%v", err)
+		newCNC.CloseConnection()
+		return err
+	}
+	// Get DTO and set unique key if not set
+	dto := newCNC.GetDTO()
+	if dto.UniqueKey == "" {
+		dto.UniqueKey = CNC_M.GenerateUniqueKey()
+	}
+	newCNC.SetDTO(dto)
+	CNC_M.CNC_Machines = append(CNC_M.CNC_Machines, newCNC)
+
+	go CNC_M.UpdateMachineData(newCNC)
+
+	CNC_M.IsChargeTable <- []byte(CNC_M.GetJson())
+	go newCNC.CNCStart()
+
+	log.Println("New cnc start success!")
+	newCNC.WriteLog(CNCService.LogLevelSuccess, "Successfully connected")
+
+	return nil
 }
 
 func (CNC_M *CNCManager) UpdateLogs() {
