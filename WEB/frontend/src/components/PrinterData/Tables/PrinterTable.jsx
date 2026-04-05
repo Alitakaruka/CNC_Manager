@@ -15,36 +15,7 @@ import {
 } from 'lucide-react'
 import { useLocalization } from '../../../hooks/useLocalization.jsx'
 import wsClient from '../../../hooks/WebSocketClient'
-
-function getCncUniqueKey(cnc) {
-  if (!cnc || typeof cnc !== 'object') return ''
-  return cnc.uniqueKey || cnc.UniqueKey || ''
-}
-
-function mergeCncIntoList(prev, cnc) {
-  const key = getCncUniqueKey(cnc)
-  if (!key) return prev
-  const index = prev.findIndex(c => getCncUniqueKey(c) === key)
-  if (index !== -1) {
-    const next = [...prev]
-    next[index] = { ...next[index], ...cnc }
-    return next
-  }
-  return [...prev, cnc]
-}
-
-/** Полный снимок таблицы (массив из нескольких станков) заменяет state; один объект или [один] — мерж по uniqueKey. */
-function applyPrintersWsPayload(prev, data) {
-  if (Array.isArray(data)) {
-    if (data.length === 0) return prev
-    if (data.length === 1) return mergeCncIntoList(prev, data[0])
-    return data
-  }
-  if (data && typeof data === 'object' && getCncUniqueKey(data)) {
-    return mergeCncIntoList(prev, data)
-  }
-  return prev
-}
+import { getCncUniqueKey, mergeCncIntoList, applyPrintersWsPayload } from '../../../utils/printersPayload'
 
 function PrintersTable({ SetNowPrinter, SetDetailsIsOpen }) {
   const [cncs, setCncs] = useState([])
@@ -310,13 +281,13 @@ function PrintersTable({ SetNowPrinter, SetDetailsIsOpen }) {
                   {cnc.executingTask ? (
                     <div className="space-y-1">
                       <div className="flex items-center justify-between text-sm">
-                        <span>{cnc.progress || 0}%</span>
+                        <span>{cnc.progress.toFixed(3) || 0}%</span>
                         <Clock className="h-4 w-4 text-gray-400" />
                       </div>
                       <div className="w-full bg-gray-200 rounded-full h-2 dark:bg-gray-700">
                         <div
                           className="bg-success-500 h-2 rounded-full transition-all duration-500"
-                          style={{ width: `${cnc.progress || 0}%` }}
+                          style={{ width: `${cnc.progress.toFixed(3) || 0}%` }}
                         />
                       </div>
                       <div className="text-xs text-gray-500 dark:text-gray-400">

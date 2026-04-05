@@ -30,7 +30,7 @@ import CncLogo from './CncLogo'
 import wsClient from '../hooks/WebSocketClient'
 import toast from 'react-hot-toast'
 
-export default function Header() {
+export default function Header({ activeNav = 'home', onNavigate }) {
   const [navOpen, setNavOpen] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [logsOpen, setLogsOpen] = useState(false)
@@ -57,9 +57,9 @@ export default function Header() {
   }, [logs, logsOpen])
 
   const navItems = [
-    { icon: Home, label: t('navigation.home'), active: true },
-    { icon: CncLogo, label: t('navigation.printers') },
-    { icon: BarChart3, label: t('navigation.reports') }
+    { id: 'home', icon: Home, label: t('navigation.home') },
+    { id: 'machines', icon: CncLogo, label: t('navigation.printers') },
+    { id: 'reports', icon: BarChart3, label: t('navigation.reports') }
   ]
 
   const settingsItems = [ { icon: Palette, label: t('common.theme') } ]
@@ -116,8 +116,11 @@ export default function Header() {
           {/* Navigation */}
           <div className="hidden md:flex items-center space-x-4">
             {navItems.map((item) => (
-              <button key={item.label}
-                className={`flex items-center space-x-2 px-5 py-3 rounded-lg font-medium transition-all duration-200 ${item.active ? 'bg-primary-100 text-primary-700 shadow-md' : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'}`}
+              <button
+                key={item.id}
+                type="button"
+                onClick={() => onNavigate?.(item.id)}
+                className={`flex items-center space-x-2 px-5 py-3 rounded-lg font-medium transition-all duration-200 dark:hover:bg-gray-800 ${activeNav === item.id ? 'bg-primary-100 text-primary-700 shadow-md dark:bg-primary-900/40 dark:text-primary-200' : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900 dark:text-gray-300'}`}
               >
                 <item.icon className="h-4 w-4" />
                 <span>{item.label}</span>
@@ -262,8 +265,11 @@ export default function Header() {
             <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }} className="md:hidden py-4 border-t border-white/20">
               <div className="flex flex-col space-y-2">
                 {navItems.map((item, index) => (
-                  <motion.button key={item.label}
-                    className={`flex items-center space-x-3 px-4 py-3 rounded-lg font-medium transition-all duration-200 ${item.active ? 'bg-primary-100 text-primary-700' : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'}`}
+                  <motion.button
+                    key={item.id}
+                    type="button"
+                    onClick={() => { onNavigate?.(item.id); setNavOpen(false) }}
+                    className={`flex items-center space-x-3 px-4 py-3 rounded-lg font-medium transition-all duration-200 dark:hover:bg-gray-800 ${activeNav === item.id ? 'bg-primary-100 text-primary-700 dark:bg-primary-900/40 dark:text-primary-200' : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900 dark:text-gray-300'}`}
                     initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: index * 0.1 }}
                   >
                     <item.icon className="h-5 w-5" />

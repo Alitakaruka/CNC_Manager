@@ -35,6 +35,38 @@ export default {
     logs: 'Logs'
   },
 
+  // Machines registry tab
+  machinesPage: {
+    title: 'Machines',
+    subtitle: 'Machine registry (WebSocket GetRegistry). Separate from the monitoring table on Home.',
+    refresh: 'Refresh',
+    connect: 'Connect',
+    connecting: 'Connecting…',
+    connectSuccess: 'Reconnect request completed',
+    connectError: 'Could not connect',
+    missingKey: 'Machine has no unique key',
+    unnamed: 'Unnamed',
+    empty: 'No machine data. Check WebSocket or tap Refresh.',
+    connectionDataUnavailable: '—',
+    methodCOM: 'COM',
+    methodIP: 'IP',
+    methodWifi: 'Wi‑Fi',
+    methodUSB: 'USB',
+    methodUnknown: 'Not specified',
+    columns: {
+      name: 'Name',
+      uniqueKey: 'Unique key',
+      connectionMethod: 'Connection type',
+      connectionData: 'Connection details',
+      actions: 'Actions'
+    }
+  },
+
+  reportsPage: {
+    title: 'Reports',
+    subtitle: 'This section is coming soon'
+  },
+
   // Header
   header: {
     title: 'CNC Manager',

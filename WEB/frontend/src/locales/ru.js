@@ -35,6 +35,38 @@ export default {
     logs: 'Логи'
   },
 
+  // Реестр станков (вкладка «Станки»)
+  machinesPage: {
+    title: 'Станки',
+    subtitle: 'Реестр станков (запрос GetRegistry по WebSocket). Не связан с таблицей мониторинга на главной.',
+    refresh: 'Обновить',
+    connect: 'Подключить',
+    connecting: 'Подключение…',
+    connectSuccess: 'Запрос на переподключение отправлен',
+    connectError: 'Не удалось подключить',
+    missingKey: 'Нет уникального ключа станка',
+    unnamed: 'Без имени',
+    empty: 'Нет данных о станках. Проверьте WebSocket или нажмите «Обновить».',
+    connectionDataUnavailable: '—',
+    methodCOM: 'COM',
+    methodIP: 'IP',
+    methodWifi: 'Wi‑Fi',
+    methodUSB: 'USB',
+    methodUnknown: 'Не указано',
+    columns: {
+      name: 'Наименование',
+      uniqueKey: 'Уникальный ключ',
+      connectionMethod: 'Способ подключения',
+      connectionData: 'Данные подключения',
+      actions: 'Действия'
+    }
+  },
+
+  reportsPage: {
+    title: 'Отчёты',
+    subtitle: 'Раздел в разработке'
+  },
+
   // Header
   header: {
     title: 'CNC Manager',
