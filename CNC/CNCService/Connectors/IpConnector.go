@@ -11,7 +11,7 @@ type IPConnector struct {
 	Adress string
 	Port   string
 }
-
+ 
 func NewIpConnector(Adress, port string) *IPConnector {
 	return &IPConnector{Adress: Adress, Port: port}
 }
