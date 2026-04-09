@@ -205,6 +205,8 @@ func (PS *CNCServer) ExecuteWSMessage(msg []byte) []byte {
 	if err != nil {
 		log.Println(err)
 	}
+
+	// fmt.Printf("mas: %v\n", mas)
 	// log.Println("WebSocket message" + msg)
 	switch mas.Type {
 	case "connect":
@@ -235,6 +237,19 @@ func (PS *CNCServer) ExecuteWSMessage(msg []byte) []byte {
 		}
 
 		return WEB_Socket_ACK(mas.ReqId, true)
+
+	case "GetRegistry":
+
+		// cncsJson := PS.Manager.GetJson()
+		// if cncsJson != "" && cncsJson != "[]" {
+		// 	cncsMsg := fmt.Sprintf(`{"type":"printers","data":%s}`, cncsJson)
+		// 	PS.Hub.Send([]byte(cncsMsg), false)
+		// }
+
+		reg := PS.Manager.GetRegistry()
+		PS.Hub.Send(reg, false)
+		return WEB_Socket_ACK(mas.ReqId, true)
+
 	case "command":
 		Command := struct {
 			Gcode     string `json:"gcode"`

@@ -26,21 +26,26 @@ func (PR *CNCRepository) InitRepository(sqlPath string) error {
 
 	res, ex := db.Prepare(`CREATE TABLE IF NOT EXISTS Machines(
 	id INTEGER PRIMARY KEY AUTOINCREMENT,
-	uniqueKey TEXT NOT NULL,
+	uniqueKey TEXT NOT NULL UNIQUE,
 	machineType 	 INTEGER NOT NULL,
 	chip  TEXT,
 	customName  TEXT,
 	connectionType   TEXT,
 	connectionData TEXT,
-	firmwate INTEGER.
-	)`)
+	firmwate INTEGER)`)
+
 	if ex != nil {
+		log.Println(ex)
 		return ex
 	}
-	res.Exec()
+	_, ex = res.Exec()
 
-	res, ex = db.Prepare(`CREATE TABLE IF NOT EXIST Settings(
-	id INTEGER PRIMARY KEY AUTOUNCREMENT,
+	if ex != nil {
+		log.Println(ex)
+	}
+
+	res, ex = db.Prepare(`CREATE TABLE IF NOT EXISTS Settings(
+	id INTEGER PRIMARY KEY AUTOINCREMENT,
 	deviceId INTEGER NOT NULL,
 	x_step_mm INTEGER,
 	y_step_mm INTEGER,
@@ -50,10 +55,14 @@ func (PR *CNCRepository) InitRepository(sqlPath string) error {
 	)`)
 
 	if ex != nil {
+		log.Println(ex)
 		return ex
 	}
-	res.Exec()
+	_, ex = res.Exec()
 
+	if ex != nil {
+		log.Println(ex)
+	}
 	PR.Db = db
 	return nil
 }
@@ -68,14 +77,14 @@ func (PR *CNCRepository) AddMachine(CNC *CNC.CNCCore) error {
 	}
 
 	statement, err := PR.Db.Prepare(`INSERT INTO Machines(
+		uniqueKey,
 		machineType,
 		chip,
 		customName,
 		connectionType,
 		connectionData,
 		firmwate)
-		VALUES(?,?,?,?,?,?)
-	)`)
+		VALUES(?,?,?,?,?,?,?)`)
 
 	if err != nil {
 		fmt.Printf("err: %v\n", err)
@@ -83,10 +92,11 @@ func (PR *CNCRepository) AddMachine(CNC *CNC.CNCCore) error {
 	}
 	_, err = statement.Exec(CNC.DTO.UniqueKey,
 		CNC.DTO.MACHINE_TYPE,
+		CNC.DTO.Device_Chip_Name,
 		CNC.DTO.TARGET_MACHINE_NAME,
-		CNC.DTO.ConnectionString,
+		CNC.DTO.ConnectionType,
 		CNC.DTO.ConnectionData,
-		CNC.DTO.Device_Chip_Name)
+		"")
 	if err != nil {
 		fmt.Printf("ex: %v\n", err)
 		return err
@@ -106,21 +116,25 @@ func (PR *CNCRepository) FindMachine(CNC *CNC.CNCCore) *CNC.CNC_DTO {
 	connectionType,
 	connectionData, 
 	firmwate
-	from Machines
-	where MACHINE_TYPE = (?) 
-	and TARGET_MACHINE_NAME = (?) 
-	and ConnectionString = (?)
-	and ConnectionData = (?)`
+	from Machines 
+	where machineType = (?) 
+	and customName = (?) 
+	and connectionType = (?)
+	and connectionData = (?)`
 
 	row := PR.Db.QueryRow(query,
 		CNC.DTO.MACHINE_TYPE,
 		CNC.DTO.TARGET_MACHINE_NAME,
-		CNC.DTO.ConnectionString,
+		CNC.DTO.ConnectionType,
 		CNC.DTO.ConnectionData,
 	)
-	var dum int
-
-	err := row.Scan(&dum)
+	dto := CNC.DTO
+	err := row.Scan(&dto.MACHINE_TYPE,
+		&dto.Device_Chip_Name,
+		&dto.TARGET_MACHINE_NAME,
+		&dto.ConnectionType,
+		&dto.ConnectionData,
+		&dto.FIRMWARE)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return nil
@@ -128,11 +142,44 @@ func (PR *CNCRepository) FindMachine(CNC *CNC.CNCCore) *CNC.CNC_DTO {
 		log.Println(err)
 		return nil
 	}
-	return nil
+	return &dto
 }
 
-func (PR *CNCRepository) GetAllMachines() []*CNC.CNCCore {
-	var result = make([]*CNC.CNCCore, 0)
+func (PR *CNCRepository) FindByKey(Key string) *CNC.CNC_DTO {
+	row := PR.Db.QueryRow(`SELECT 
+	machineType,
+	chip,
+	customName,
+	connectionType,
+	connectionData
+	from Machines 
+	where uniqueKey = (?)`, Key)
+
+	DTO := CNC.CNC_DTO{}
+	err := row.Scan(&DTO.MACHINE_TYPE,
+		&DTO.Device_Chip_Name,
+		&DTO.TARGET_MACHINE_NAME,
+		&DTO.ConnectionType,
+		&DTO.ConnectionData)
+
+	if err != nil {
+		log.Println(err)
+		return nil
+	}
+	return &DTO
+}
+
+func (PR *CNCRepository) GetAllMachines() []CNC.CNC_DTO {
+	// id INTEGER PRIMARY KEY AUTOINCREMENT,
+	// uniqueKey TEXT NOT NULL,
+	// machineType 	 INTEGER NOT NULL,
+	// chip  TEXT,
+	// customName  TEXT,
+	// connectionType   TEXT,
+	// connectionData TEXT,
+	// firmwate INTEGER.
+	// )`)
+	var result = make([]CNC.CNC_DTO, 0)
 
 	if PR.Db == nil {
 		return result
@@ -140,11 +187,11 @@ func (PR *CNCRepository) GetAllMachines() []*CNC.CNCCore {
 
 	query := `SELECT 
         UniqueKey,
-        MACHINE_TYPE,
-        TARGET_MACHINE_NAME,
-        ConnectionString,
-        ConnectionData,
-		Device_Chip_Name
+        machineType,
+        chip,
+        customName,
+		connectionType,
+		connectionData
     FROM Machines`
 
 	rows, err := PR.Db.Query(query)
@@ -157,37 +204,34 @@ func (PR *CNCRepository) GetAllMachines() []*CNC.CNCCore {
 		return result
 	}
 
-	var Scan struct {
-		UniqueKey           string
-		MACHINE_TYPE        int
-		TARGET_MACHINE_NAME string
-		ConnectionString    string
-		ConnectionData      string
-		Device_Chip_Name    string
-	}
+	// var Scan struct {
+	// 	UniqueKey      string
+	// 	machineType    int
+	// 	chip           string
+	// 	customName     string
+	// 	connectionType string
+	// 	connectionData string
+	// }
+
+	DTO := CNC.CNC_DTO{}
 
 	for rows.Next() {
-		err := rows.Scan(&Scan.UniqueKey,
-			&Scan.MACHINE_TYPE,
-			&Scan.TARGET_MACHINE_NAME,
-			&Scan.ConnectionString,
-			&Scan.ConnectionData,
-			&Scan.Device_Chip_Name)
+		err := rows.Scan(
+			&DTO.UniqueKey,
+			&DTO.MACHINE_TYPE,
+			&DTO.Device_Chip_Name,
+			&DTO.TARGET_MACHINE_NAME,
+			&DTO.ConnectionType,
+			&DTO.ConnectionData)
 
 		if err != nil {
 			log.Println(err)
 			return result
 		}
-		core := CNC.CNCCore{}
-		core.DTO.UniqueKey = Scan.UniqueKey
-		core.DTO.MACHINE_TYPE = Scan.MACHINE_TYPE
-		core.DTO.TARGET_MACHINE_NAME = Scan.TARGET_MACHINE_NAME
-		core.DTO.ConnectionString = Scan.ConnectionString
-		core.DTO.ConnectionData = Scan.ConnectionData
-		core.DTO.Device_Chip_Name = Scan.Device_Chip_Name
 
-		result = append(result, &core)
+		result = append(result, DTO)
 	}
+	// fmt.Printf("result: %v\n", result)
 	return result
 }
 
@@ -211,7 +255,7 @@ func (PR *CNCRepository) DeletePrinter(CNC *CNC.CNCCore) error {
 	}
 	_, ex = statement.Exec(printerData.TARGET_MACHINE_NAME,
 		printerData.ConnectionData,
-		printerData.FIRMWARE_VERSION)
+		printerData.FIRMWARE)
 	if ex != nil {
 		return ex
 	}

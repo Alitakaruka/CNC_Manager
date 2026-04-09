@@ -17,6 +17,7 @@ import (
 type ConnectionData struct {
 	TypeOfConnection string
 	ConnectionData   string
+	UniqueKey        string
 }
 
 type CNCManager struct {
@@ -69,71 +70,73 @@ func (CNC_M *CNCManager) InitManager(sqlPath string) {
 	}()
 
 	CNC_M.DataBase.InitRepository(sqlPath)
-	machines := CNC_M.DataBase.GetAllMachines()
-	for _, machine := range machines {
-		machine := machine
-		machine.Connection = CNC.GetConnector(machine.DTO.ConnectionData, machine.DTO.ConnectionString)
-		if machine.Connection != nil {
-			go func() {
-				err := machine.Reconnect()
-				if err != nil {
-					log.Println(err)
-					return
-				}
-				err = machine.InitDevice()
-				if err != nil {
-					log.Println(err)
-					return
-				}
-				machine.CNCStart()
-			}()
+	// machines := CNC_M.DataBase.GetAllMachines()
+	// for _, machine := range machines {
+	// 	machine := machine
+	// 	machine.Connection = CNC.GetConnector(machine.DTO.ConnectionData, machine.DTO.ConnectionString)
+	// 	if machine.Connection != nil {
+	// 		go func() {
+	// 			err := machine.Reconnect()
+	// 			if err != nil {
+	// 				log.Println(err)
+	// 				return
+	// 			}
+	// 			err = machine.InitDevice()
+	// 			if err != nil {
+	// 				log.Println(err)
+	// 				return
+	// 			}
+	// 			machine.CNCStart()
+	// 		}()
 
-		} else {
-			machine.WriteLog(CNCService.LogLevelWarning, "Failed to connect to the machine")
-		}
-		CNC_M.CNC_Machines = append(CNC_M.CNC_Machines, machine)
-	}
+	// 	} else {
+	// 		machine.WriteLog(CNCService.LogLevelWarning, "Failed to connect to the machine")
+	// 	}
+	// 	CNC_M.CNC_Machines = append(CNC_M.CNC_Machines, machine)
+	// }
 }
 
 func (CNC_M *CNCManager) Connect(conData ConnectionData) error {
 	if index, find := CNC_M.findByConnectionData(conData); find {
-		if CNC_M.IsConnected(index) {
-			return errors.New("CNC is already connected")
-		} else {
+		select {
+		case <-CNC_M.CNC_Machines[index].IsClose:
 			return CNC_M.reconect(index)
+		default:
+			return errors.New("CNC is already connected")
 		}
 	}
+
 	newCNC, ex := CNC.Connect(conData.TypeOfConnection, conData.ConnectionData)
-	// log.Printf("Connected by type %v, data: %v\n", conData.TypeOfConnection, conData.ConnectionData)
 	if ex != nil {
 		return ex
 	}
 	err := newCNC.InitDevice()
 
 	if err != nil {
-		// log.Printf("Device init error:%v", err)
 		newCNC.CloseConnection()
 		return err
 	}
-	// Get DTO and set unique key if not set
 	dto := newCNC.GetDTO()
-	if dto.UniqueKey == "" {
+	if conData.UniqueKey == "" {
 		dto.UniqueKey = CNC_M.GenerateUniqueKey()
+	} else {
+		dto.UniqueKey = conData.UniqueKey
 	}
 	newCNC.SetDTO(dto)
 	CNC_M.CNC_Machines = append(CNC_M.CNC_Machines, newCNC)
 
-	go CNC_M.UpdateMachineData(newCNC)
-
-	CNC_M.IsChargeTable <- []byte(CNC_M.GetJson())
-	go newCNC.CNCStart()
-
-	log.Println("New cnc start success!")
+	CNC_M.StartCNC(newCNC)
 	newCNC.WriteLog(CNCService.LogLevelSuccess, "Successfully connected")
 
 	return nil
 }
 
+func (CNC_M *CNCManager) StartCNC(cnc *CNC.CNCCore) {
+	CNC_M.IsChargeTable <- []byte(CNC_M.GetJson())
+	go CNC_M.DataBase.AddMachine(cnc)
+	go CNC_M.UpdateMachineData(cnc)
+	go cnc.CNCStart()
+}
 func (CNC_M *CNCManager) UpdateLogs() {
 
 }
@@ -180,16 +183,11 @@ func (M *CNCManager) GetNewCncData() []byte {
 	return <-M.NewDataCncBuffer
 }
 
-func (CNC_M *CNCManager) IsConnected(index int) bool {
-	DTO := CNC_M.CNC_Machines[index].GetDTO()
-	return DTO.Flags.Connected
-}
-
 func (CNC_M *CNCManager) findByConnectionData(ConData ConnectionData) (int, bool) {
-	ConnectionString := ConData.TypeOfConnection + ":" + ConData.ConnectionData
 	for ind, CNC := range CNC_M.CNC_Machines {
 		DTO := CNC.GetDTO()
-		if DTO.ConnectionString == ConnectionString {
+		if DTO.ConnectionType == ConData.TypeOfConnection &&
+			DTO.ConnectionData == ConData.ConnectionData {
 			return ind, true
 		}
 	}
@@ -221,39 +219,54 @@ func (CNC_M *CNCManager) ExecuteTask(key string, byteFile []byte) error {
 }
 
 func (CNC_M *CNCManager) reconect(index int) error {
-	CNC := CNC_M.CNC_Machines[index]
-	err := CNC.Reconnect()
+	cnc := CNC_M.CNC_Machines[index]
+	err := cnc.Reconnect()
 	if err != nil {
 		return err
 	}
-	err = CNC.InitDevice()
+	err = cnc.InitDevice()
 	if err != nil {
 		return err
 	}
-	CNC.CNCStart()
+	CNC_M.StartCNC(cnc)
 
 	return nil
 }
 
 func (CNC_M *CNCManager) Reconnect(uniqueKey string) error {
+
 	if ind, ok := CNC_M.findByKey(uniqueKey); ok {
-		return CNC_M.reconect(ind)
+		select {
+		case <-CNC_M.CNC_Machines[ind].IsClose:
+			return CNC_M.reconect(ind)
+		default:
+			return errors.New("the device is already connect")
+		}
 	}
+
+	if DTO := CNC_M.DataBase.FindByKey(uniqueKey); DTO != nil {
+		Con := ConnectionData{}
+		Con.ConnectionData = DTO.ConnectionData
+		Con.TypeOfConnection = DTO.ConnectionType
+		Con.UniqueKey = uniqueKey
+		return CNC_M.Connect(Con)
+	}
+
 	return errors.New("the device not found")
 }
 
 type CNC_JSON struct {
 	CNC_Name string `json:"CNCName"`
 	// Version          string `json:"version"`
-	CncType          string `json:"CncType"`
-	UniqueKey        string `json:"uniqueKey"`
-	IsWorking        bool   `json:"isWorking"`
-	ExecutingTask    bool   `json:"executingTask"`
-	TypeOfConnection string `json:"typeOfConnection"`
-	Progress         int    `json:"progress"`
-	TimeRemaining    int    `json:"timeRemaining"`
-	FileStorage      bool   `json:"fileStorage"`
-	StorageFilesFMT  string `json:"storageFilesFMT"`
+	CncType          string  `json:"CncType"`
+	UniqueKey        string  `json:"uniqueKey"`
+	IsWorking        bool    `json:"isWorking"`
+	ExecutingTask    bool    `json:"executingTask"`
+	TypeOfConnection string  `json:"typeOfConnection"`
+	Progress         float32 `json:"progress"`
+	TimeRemaining    int     `json:"timeRemaining"`
+	FileStorage      bool    `json:"fileStorage"`
+	StorageFilesFMT  string  `json:"storageFilesFMT"`
 
 	TDP any `json:"TDP"` //Specifical device data
 
@@ -431,4 +444,15 @@ func (CNC_M *CNCManager) UploadFile(key, filename string, file []byte) error {
 	CNC_M.CNC_Machines[index].UploadFile(filename, file)
 
 	return nil
+}
+
+func (CNC_M *CNCManager) GetRegistry() []byte {
+	DTOs := CNC_M.DataBase.GetAllMachines()
+	res, err := json.Marshal(DTOs)
+
+	if err != nil {
+		log.Println(err)
+		return make([]byte, 0)
+	}
+	return res
 }

@@ -92,13 +92,14 @@ func (P *FDMPrinterData) ExecuteTask(file []byte) {
 			return
 		default:
 			res := CNCService.DeleteComments_GCode(Data)
+			// res = FixGCodeLine(res)
 
-			if strings.HasPrefix(res, "M104") || //TODO DEBUG!
-				strings.HasPrefix(res, "M109") ||
-				strings.HasPrefix(res, "M140") ||
-				strings.HasPrefix(res, "M190") {
-				continue // ← пропускаем нагрев
-			}
+			// if strings.HasPrefix(res, "M104") || //TODO DEBUG!
+			// 	strings.HasPrefix(res, "M109") ||
+			// 	strings.HasPrefix(res, "M140") ||
+			// 	strings.HasPrefix(res, "M190") {
+			// 	continue // ← пропускаем нагрев
+			// }
 
 			if res == "" || res == CNCService.EndOfData {
 				continue
@@ -106,9 +107,11 @@ func (P *FDMPrinterData) ExecuteTask(file []byte) {
 			P.Core.SendMessage([]byte(res + CNCService.EndOfData))
 
 			CurrentCommands++
-			P.Core.Progress = (CurrentCommands / MaxCommands) * 100
+			P.Core.Progress = (float32(CurrentCommands) / float32(MaxCommands)) * 100
+			// fmt.Printf("P.Core.Progress: %v\n", P.Core.Progress)
 		}
 	}
+	fmt.Println("End!")
 	P.Core.IsTaskEnd <- struct{}{}
 }
 
@@ -145,6 +148,56 @@ func SkipHeatingCommands(gcode string) string {
 	return strings.Join(out, "\n")
 }
 
+// func FixGCodeLine(line string) string {
+// 	if len(line) == 0 {
+// 		return line
+// 	}
+
+// 	out := make([]byte, 0, len(line)+8)
+// 	i := 0
+
+// 	for i < len(line) {
+// 		c := line[i]
+
+// 		// Обрабатываем параметры
+// 		if c == 'E' || c == 'X' || c == 'Y' || c == 'Z' || c == 'F' {
+// 			out = append(out, c)
+// 			i++
+
+// 			// пропускаем пробелы
+// 			for i < len(line) && line[i] == ' ' {
+// 				out = append(out, line[i])
+// 				i++
+// 			}
+
+// 			// обработка знака
+// 			if i < len(line) && (line[i] == '-' || line[i] == '+') {
+// 				sign := line[i]
+// 				out = append(out, sign)
+// 				i++
+
+// 				// если после знака сразу точка → вставляем 0
+// 				if i < len(line) && line[i] == '.' {
+// 					out = append(out, '0')
+// 				}
+
+// 				continue
+// 			}
+
+// 			// если сразу точка → вставляем 0
+// 			if i < len(line) && line[i] == '.' {
+// 				out = append(out, '0')
+// 			}
+
+// 			continue
+// 		}
+
+// 		out = append(out, c)
+// 		i++
+// 	}
+
+//		return string(out)
+//	}
 func (FDM *FDMPrinterData) ParseCommand(Prefix, dataStr string) {
 
 	switch Prefix {

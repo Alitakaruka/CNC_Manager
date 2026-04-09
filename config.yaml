@@ -1,7 +1,7 @@
 server:
   addr: "0.0.0.0"
   port: "8080"
-  maxLogs: 1024
+  maxLogs: 500
 
 database:
   path: "data/CNCManagerDB.db"
