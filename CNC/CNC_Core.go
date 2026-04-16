@@ -207,10 +207,7 @@ func (cnc *CNCCore) InitDevice() error {
 	// fmt.Printf("res: %v\n", []byte(res))
 
 	if res == "" {
-		err := cnc.Connection.Close()
-		if err != nil {
-			log.Println(err)
-		}
+		cnc.CloseConnection()
 		return errors.New("the device did not respond to the request")
 	}
 	commands := strings.Split(res, CNCService.EndOfData)
@@ -506,13 +503,13 @@ func (cnc *CNCCore) UploadFile(filename string, file []byte) {
 }
 
 func (cnc *CNCCore) CloseConnection() {
+	cnc.mutex.Lock()
 	select {
 	case <-cnc.IsClose:
 		return
 	default:
 
 	}
-	cnc.mutex.Lock()
 	cnc.Connection.Close()
 	cnc.DTO.Flags.Connected = false
 
