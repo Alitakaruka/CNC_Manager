@@ -513,21 +513,19 @@ func (cnc *CNCCore) CloseConnection() {
 
 	}
 	cnc.mutex.Lock()
-	if cnc.DTO.Flags.Connected {
-		cnc.Connection.Close()
-		cnc.DTO.Flags.Connected = false
+	cnc.Connection.Close()
+	cnc.DTO.Flags.Connected = false
 
-		if cnc.WatchDog != nil {
-			cnc.WatchDog.Close()
-		}
-		close(cnc.IsClose)
-		close(cnc.IsCharge)
-		close(cnc.IsTaskEnd)
-		cnc.Progress = 0
-		// close(cnc.Logs)
-		cnc.WriteLog(CNCService.LogLevelError, "The device was close!")
-		// cnc.isInitEnd = false
+	if cnc.WatchDog != nil {
+		cnc.WatchDog.Close()
 	}
+	close(cnc.IsClose)
+	close(cnc.IsCharge)
+	close(cnc.IsTaskEnd)
+	cnc.Progress = 0
+	// close(cnc.Logs)
+	cnc.WriteLog(CNCService.LogLevelError, "The device was close!")
+	// cnc.isInitEnd = false
 	cnc.mutex.Unlock()
 }
 
