@@ -189,7 +189,7 @@ func (cnc *CNCCore) InitDevice() error {
 	var Data []byte
 	stop := false
 
-	timeout := time.After(time.Second * 5)
+	timeout := time.After(time.Second * 10)
 	for !stop {
 		select {
 		case <-time.After(time.Second * 2):
