@@ -6,6 +6,7 @@ import (
 	"bufio"
 	"bytes"
 	"errors"
+	"fmt"
 	"io"
 	"log"
 	"os"
@@ -202,7 +203,7 @@ func (cnc *CNCCore) InitDevice() error {
 	// fmt.Println("Stop ident!")
 
 	res := string(Data)
-	// fmt.Printf("res: %v\n", res)
+	fmt.Printf("res: %v\n", res)
 	// fmt.Printf("res: %v\n", []byte(res))
 
 	if res == "" {
