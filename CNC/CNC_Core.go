@@ -200,7 +200,7 @@ func (cnc *CNCCore) InitDevice() error {
 			Data = append(Data, b)
 		}
 	}
-	// fmt.Println("Stop ident!")
+	fmt.Println("Stop ident!")
 
 	res := string(Data)
 	fmt.Printf("res: %v\n", res)
