@@ -3,6 +3,7 @@ package Connectors
 import (
 	"fmt"
 	"io"
+	"log"
 	"sync"
 )
 
@@ -39,6 +40,7 @@ func (t *trackCloser) Read(p []byte) (int, error) {
 // Write проксирует Write
 func (t *trackCloser) Write(p []byte) (int, error) {
 
+	log.Println("i write:" + string(p))
 	t.Wmu.Lock()
 	n, err := t.ReadWriteCloser.Write(p)
 	t.Wmu.Unlock()
