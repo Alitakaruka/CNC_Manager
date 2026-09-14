@@ -131,10 +131,11 @@ export default {
       sending: 'Отправка команды...'
     },
     commands: {
-      homeAll: 'Home All',
+      homeAll: 'Домой',
       homeXY: 'Home XY',
       homeZ: 'Home Z',
-      disableMotors: 'Disable Motors',
+      disableMotors: 'Выключить моторы',
+      disconnect: 'Отключиться',
       moveAxis: 'Движение по оси',
       commandExecuted: 'Команда выполнена',
       movementCompleted: 'Движение выполнено'

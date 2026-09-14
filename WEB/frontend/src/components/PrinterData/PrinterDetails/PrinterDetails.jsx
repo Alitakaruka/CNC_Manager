@@ -151,32 +151,56 @@ export default function Details({ PrinterData, SetDetailsIsOpen }) {
     // Try WebSocket first
   if (wsClient.connected) {
   try {
-    // Read file as text (G-code files are text)
+    // // Read file as text (G-code files are text)
+    // const fileData = await new Promise((resolve, reject) => {
+    //   const reader = new FileReader();
+    //   reader.onload = (e) => resolve(e.target.result);
+    //   reader.onerror = reject;
+    //   reader.readAsText(file);
+    // });
+
+    // // --- Encode to Base64 ---
+    // const fileBase64 = btoa(unescape(encodeURIComponent(fileData)));
+    // // -------------------------
+
+    // const result = await wsClient.request('executeTask', {
+    //   uniqueKey: displayData.uniqueKey,
+    //   fileName: file.name,
+    //   fileData: fileBase64   // <-- теперь строка Base64
+    // });
+
+
     const fileData = await new Promise((resolve, reject) => {
       const reader = new FileReader();
+
       reader.onload = (e) => resolve(e.target.result);
       reader.onerror = reject;
-      reader.readAsText(file);
+
+      reader.readAsArrayBuffer(file);
     });
 
-    // --- Encode to Base64 ---
-    const fileBase64 = btoa(unescape(encodeURIComponent(fileData)));
-    // -------------------------
+    const bytes = new Uint8Array(fileData);
+
+    let binary = '';
+    bytes.forEach(b => {
+      binary += String.fromCharCode(b);
+    });
+
+    const fileBase64 = btoa(binary);
 
     const result = await wsClient.request('executeTask', {
       uniqueKey: displayData.uniqueKey,
       fileName: file.name,
-      fileData: fileBase64   // <-- теперь строка Base64
+      fileData: fileBase64
     });
-
     toast.success(t('notifications.printStarted'));
     console.log('Ответ сервера:', result);
     setIsUploading(false);
     return;
   } catch (wsError) {
     console.warn('WebSocket executeTask failed, falling back to HTTP:', wsError);
-    // Fall through to HTTP fallback
-  }
+  // Fall through to HTTP fallback
+  } 
 }
 
       // HTTP fallback
@@ -225,6 +249,27 @@ export default function Details({ PrinterData, SetDetailsIsOpen }) {
     }
   }
 
+
+  const handleDickonnect = async () => {
+    //  console.log("start reconnect!")
+    // if (!canReconnect) {
+    //   toast.error(t('notifications.printerNotSelected'))
+    //   console.log("Cant reconnect!")
+    //   return
+    // }
+    //  console.log("Can reconnect!")
+    setIsReconnecting(true)
+    try {
+       console.log("ConnectionHook!")
+      await DisconnectCNC(uniqueKey)
+      toast.success(t('header.connected'))
+    } catch (e) {
+      toast.error(`${t('common.error')}: ${e.message}`)
+    } finally {
+      setIsReconnecting(false)
+    }
+  }
+
   const getStatusColor = () => {
     const cnc = displayData
     const isWorking = cnc.isWorking !== undefined ? cnc.isWorking : cnc.Flags?.Connected
@@ -246,6 +291,7 @@ export default function Details({ PrinterData, SetDetailsIsOpen }) {
   }
 
   const getPrinterIcon = () => {
+  console.log(displayData.CncType);
     const printerType = (displayData.CncType || displayData.printerType || displayData.MACHINE_TYPE || '').toUpperCase()
 
     switch (printerType) {
@@ -258,7 +304,7 @@ export default function Details({ PrinterData, SetDetailsIsOpen }) {
       case 'SLA_PRINTER':
         return <Droplet className="h-6 w-6 text-primary-600 dark:text-primary-400" />
       case 'SLS':
-      case 'SLS_PRINTER':
+      case 'SLS 3D PRINTER':
         return <Layers className="h-6 w-6 text-primary-600 dark:text-primary-400" />
       case 'MILLING':
         return <Settings className="h-6 w-6 text-primary-600 dark:text-primary-400" />
@@ -314,6 +360,43 @@ export default function Details({ PrinterData, SetDetailsIsOpen }) {
             )}
           </motion.button>
           </div>
+
+            {/* disckonned */}
+             <div>
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
+              {displayData.CNCName || displayData.printerName || displayData.TARGET_MACHINE_NAME  || 'Unnamed CNC'}
+            </h3>
+            <div className="flex items-center space-x-2">
+              <span className={`text-sm font-medium ${getStatusColor()}`}>
+                {getStatusText()}
+              </span>
+              <span className="text-xs text-gray-500 dark:text-gray-400">
+                {displayData.uniqueKey || displayData.UniqueKey}
+              </span>
+            </div>
+              <motion.button
+            onClick={handleDickonnect}
+            className={`px-3 py-2 rounded-lg text-sm font-medium flex items-center space-x-2 ${controlsDisabled ? 'btn-primary' : 'btn-secondary'}`}
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.95 }}
+            disabled={isReconnecting || !canReconnect}
+            title={t('printers.details.reconnect')}
+          >
+            {isReconnecting ? (
+              <>
+                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                <span>{t('status.connecting')}</span>
+              </>
+            ) : (
+              <>
+                <RotateCcw className="h-4 w-4" />
+                <span>{t('printers.details.reconnect')}</span>
+              </>
+            )}
+          </motion.button>
+          </div>
+
+
         </div>
 
 
@@ -464,7 +547,7 @@ export default function Details({ PrinterData, SetDetailsIsOpen }) {
             <input
               type="file"
               ref={fileRef}
-              accept=".gcode"
+              accept= {displayData.CncType == "SLS 3D PRINTER" ? ".sl1s" : ".gcode"}
               className="hidden"
               id="fileInput"
               disabled={controlsDisabled}

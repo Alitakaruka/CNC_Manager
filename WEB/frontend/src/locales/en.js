@@ -135,6 +135,7 @@ export default {
       homeXY: 'Home XY',
       homeZ: 'Home Z',
       disableMotors: 'Disable Motors',
+      disconnect: 'Diskonnect',
       moveAxis: 'Move Axis',
       commandExecuted: 'Command Executed',
       movementCompleted: 'Movement Completed'

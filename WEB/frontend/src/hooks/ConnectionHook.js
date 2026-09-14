@@ -58,19 +58,19 @@ export default async function ConnectCNC(TypeOfConnection = "", ConnectionData =
   }
 
   // Валидация COM порта
-if (
-  TypeOfConnection === "COM" &&
-  !(
-    /^COM\d+$/i.test(ConnectionData) ||
-    /^\/dev\/ttyUSB\d+$/.test(ConnectionData)
-  )
-) {
-  throw new Error(
-    "Неверный формат порта. Примеры:\n" +
-    "Windows: COM3\n" +
-    "Linux: /dev/ttyUSB0, /dev/ttyACM0, /dev/serial/by-id/..."
-  );
-}
+// if (
+//   TypeOfConnection === "COM" &&
+//   !(
+//     /^COM\d+$/i.test(ConnectionData) ||
+//     /^\/dev\/ttyUSB\d+$/.test(ConnectionData)
+//   )
+// ) {
+//   throw new Error(
+//     "Неверный формат порта. Примеры:\n" +
+//     "Windows: COM3\n" +
+//     "Linux: /dev/ttyUSB0, /dev/ttyACM0, /dev/serial/by-id/..."
+//   );
+// }
 
   // Валидация IP адреса
   if (TypeOfConnection === "IP") {
@@ -92,12 +92,12 @@ if (
     return typeof result === 'string' ? result : 'OK'
   } catch (error) {
     console.error("WS connection error:", error)
-    throw new Error(error?.message || "Ошибка подключения через WebSocket")
+    throw new Error(error?.message || "WebSocket connection error")
   }
 }
 
 export async function ReconnectCNC(UniqueKey = "") {
-  console.log("UniqueKey:", UniqueKey)
+  // console.log("UniqueKey:", UniqueKey)
 
   if (UniqueKey === ""){
       throw new Error("Unique key is empty!")
@@ -114,6 +114,30 @@ export async function ReconnectCNC(UniqueKey = "") {
     return typeof result === 'string' ? result : 'OK'
   } catch (error) {
     console.error("WS connection error:", error)
-    throw new Error(error?.message || "Ошибка подключения через WebSocket")
+    throw new Error(error?.message || "WebSocket connection error")
   }
 }
+
+export async function DisconnectCNC(UniqueKey = "") {
+  // console.log("UniqueKey:", UniqueKey)
+
+  if (UniqueKey === ""){
+      throw new Error("Unique key is empty!")
+  }
+
+  // Try WS first
+  try {
+    const { wsClient } = await import('./WebSocketClient')
+    await ensureWsReady(wsClient)
+
+    const result = await wsClient.request('disconnect', {UniqueKey})
+    console.log(result)
+
+    return typeof result === 'string' ? result : 'OK'
+  } catch (error) {
+    console.error("WS connection error:", error)
+    throw new Error(error?.message || "WebSocket connection error")
+  }
+}
+
+

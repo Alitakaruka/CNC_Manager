@@ -13,7 +13,8 @@ import {
   Target,
   Send,
   Zap,
-  Square
+  Square,
+  RefreshCwOff
 } from 'lucide-react'
 import SendGCode from '../../../hooks/Gcode'
 import toast from 'react-hot-toast'
