@@ -3,6 +3,7 @@ package Service
 import (
 	laser "CNCManager/CNC/LASERS"
 	AtmegaPrinter "CNCManager/CNC/ThreeDPrinters/TypeOfPrinters/FMD/Printers"
+	SLS_Printer "CNCManager/CNC/ThreeDPrinters/TypeOfPrinters/SLS"
 	"errors"
 	"log"
 	"os"
@@ -47,7 +48,7 @@ func GetConfig(path string) *Config {
 func InitPrinters() {
 	AtmegaPrinter.InitAtmegaPrinter()
 	laser.InitStandartLaser()
-
+	SLS_Printer.InitSLSPrinter()
 	//TODO: other printers
 }
 

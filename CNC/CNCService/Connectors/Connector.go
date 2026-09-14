@@ -16,11 +16,11 @@ type CNCConnector interface {
 // trackCloser оборачивает io.ReadWriteCloser и сигнализирует через канал о закрытии
 type trackCloser struct {
 	io.ReadWriteCloser
-	closed   chan struct{} // сигнал закрытия
-	once     sync.Once     // чтобы закрытие сработало только один раз
-	isClosed bool
-	Rmu      sync.RWMutex
-	Wmu      sync.RWMutex
+	closed chan struct{} // сигнал закрытия
+	once   sync.Once     // чтобы закрытие сработало только один раз
+	// isClosed bool
+	Rmu sync.RWMutex
+	Wmu sync.RWMutex
 }
 
 func (t *trackCloser) InitTracker(rwc io.ReadWriteCloser) {

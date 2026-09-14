@@ -98,7 +98,8 @@ func (PR *CNCRepository) AddMachine(CNC *CNC.CNCCore) error {
 		CNC.DTO.ConnectionData,
 		"")
 	if err != nil {
-		fmt.Printf("ex: %v\n", err)
+		// fmt.Printf("ex: %v\n", err)
+		log.Println(err)
 		return err
 	}
 	return nil

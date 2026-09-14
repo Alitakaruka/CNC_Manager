@@ -35,6 +35,7 @@ const (
 //	BufferCommandSize  = "S_"   // "S_"
 //	ItsGcodeCommand    = "G_"   // "G_"
 //	ClearBuffer        = "C_"   // "C_"
+
 //	SetLightStatus     = "L_"   // "L_"
 //
 // )
@@ -65,7 +66,16 @@ const (
 	SwitchRGBLight = "RGBLight:"
 
 	// ConnectionType = "ConnectionType:"
-	SYNC = "SYNC"
+
+	GetNewFileData       = "FileRead: DataLength=%d Offset=%d"
+	FileDataTransmission = "StartOfTransmissionFile:DataLength=%d FileName=%s"
+	FileDataRecieve      = "FileData DataLength=%d Offset=%d Data=%s"
+
+	FileReadPrefix = "FileRead:"
+	SYNC           = "SYNC"
+	FileDataLen    = "FileDataLen:"
+	Filedata       = "FileData:"
+	FileACK        = "F_ok"
 )
 
 // Immutable

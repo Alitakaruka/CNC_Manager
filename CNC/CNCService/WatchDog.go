@@ -2,7 +2,6 @@ package CNCService
 
 import (
 	"context"
-	"fmt"
 	"time"
 )
 
@@ -32,7 +31,7 @@ func NewWatchDog(Seconds int64, killFunc func()) *WatchDog {
 				close(wd.isStoped)
 				return
 			case <-ctx.Done():
-				fmt.Println("WD stop!")
+				// fmt.Println("WD stop!")
 				// wd.WG.Done()
 				close(wd.isStoped)
 				if !wd.timer.Stop() {

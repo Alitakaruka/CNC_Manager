@@ -1,10 +1,7 @@
 package CNCService
 
 import (
-	"io"
-	"log"
 	"sync"
-	"time"
 )
 
 type Transmitter struct {
@@ -23,6 +20,14 @@ func (T *Transmitter) Trainsmit(bytes int) {
 	T.mutex.Unlock()
 }
 
+func (T *Transmitter) Lock() {
+	T.mutex.Lock()
+}
+
+func (T *Transmitter) Unlock() {
+	T.mutex.Unlock()
+}
+
 func (T *Transmitter) ACK() {
 	if len(T.Commands) == 0 {
 		return
@@ -37,38 +42,13 @@ func (T *Transmitter) ACK() {
 	T.mutex.Unlock()
 }
 
-// func (T *Transmitter) SyncBuffers(Connection io.ReadWriter) {
-// 	T.mutex.Lock()
-// 	defer T.mutex.Unlock()
-
-// 	reader := NewTimeoutReader(Connection, time.Second*2)
-// 	Connection.Write([]byte(EndOfData + SYNC + EndOfData))
-// 	result := reader.Read()
-// 	if result == "" {
-// 		return
-// 	}
-// 	commands := strings.Split(result, EndOfData)
-// 	for _, val := range commands {
-// 		if strings.HasPrefix(val, MyBufferLen) {
-// 			str, _ := strings.CutPrefix(val, MyBufferLen)
-// 			MaxSize, err := strconv.Atoi(str)
-// 			if err != nil {
-// 				log.Println(err)
-// 			}
-// 			T.MaxBytes = MaxSize
-// 			T.CurrentFreeBytes = MaxSize
-// 		}
-// 	}
-// 	// fmt.Printf("T.MaxBytes: %v\n", T.MaxBytes)
-// 	// fmt.Printf("T.CurrentFreeBytes: %v\n", T.CurrentFreeBytes)
-// }
-
 func (T *Transmitter) SetLimits(MaxBytes, CurrentFreeBytes int) {
 	T.mutex.Lock()
 	T.MaxBytes = MaxBytes
 	T.CurrentFreeBytes = CurrentFreeBytes
 	T.mutex.Unlock()
 }
+
 func (transmitter *Transmitter) Wait(bytes int) bool {
 	if bytes > transmitter.MaxBytes {
 		return false
@@ -88,84 +68,102 @@ func NewTransmitter() *Transmitter {
 	return transmitter
 }
 
-type TimeoutReader struct {
-	reader  io.Reader
-	TimeOut time.Duration
-	buffer  []byte
+type FileTransmitter struct {
+	// Transmitter *Transmitter
+	fileData []byte
 }
 
-func NewTimeoutReader(r io.Reader, timeout time.Duration) *TimeoutReader {
-	return &TimeoutReader{reader: r, TimeOut: timeout}
+func (F *FileTransmitter) SetNewData(data []byte) {
+	copy(F.fileData, data)
 }
 
-func (PR *TimeoutReader) ReadBytes() []byte {
-	readBuf := make([]byte, 256)
-	PR.buffer = PR.buffer[:0]
-
-	timer := time.NewTimer(PR.TimeOut)
-	defer timer.Stop()
-
-	for {
-		select {
-		case <-timer.C:
-			return PR.buffer
-		default:
-			n, err := PR.reader.Read(readBuf)
-			if err != nil {
-				return PR.buffer
-			}
-
-			if n > 0 {
-				PR.buffer = append(PR.buffer, readBuf[:n]...)
-
-				if !timer.Stop() {
-					<-timer.C // clear chan
-				}
-				timer.Reset(PR.TimeOut)
-			}
-		}
+func (F *FileTransmitter) GetNewPage(pageLength, offset int) []byte {
+	End := offset + pageLength
+	if End == len(F.fileData) {
+		End = len(F.fileData)
 	}
+	data := F.fileData[offset:End]
+	return data
 }
 
-func (PR *TimeoutReader) Read() string {
-	readBuf := make([]byte, 1024)
-	PR.buffer = PR.buffer[:0]
-	for {
-		timer := time.NewTimer(PR.TimeOut)
-		n, err := PR.readWithTimeout(readBuf, timer)
-		timer.Stop()
-		if err != nil {
-			log.Println(err)
-			return string(PR.buffer)
-		}
-		if n > 0 {
-			PR.buffer = append(PR.buffer, readBuf[:n]...)
-			continue
-		}
-		return string(PR.buffer)
-	}
-}
+// type TimeoutReader struct {
+// 	reader  io.Reader
+// 	TimeOut time.Duration
+// 	buffer  []byte
+// }
 
-func (PR *TimeoutReader) readWithTimeout(buf []byte, timer *time.Timer) (int, error) {
-	done := make(chan struct {
-		n   int
-		err error
-	})
+// func NewTimeoutReader(r io.Reader, timeout time.Duration) *TimeoutReader {
+// 	return &TimeoutReader{reader: r, TimeOut: timeout}
+// }
 
-	go func() {
-		n, err := PR.reader.Read(buf)
-		done <- struct {
-			n   int
-			err error
-		}{n, err}
-	}()
+// func (PR *TimeoutReader) ReadBytes() []byte {
+// 	readBuf := make([]byte, 256)
+// 	PR.buffer = PR.buffer[:0]
 
-	select {
-	case result := <-done:
-		return result.n, result.err
-	case <-timer.C:
-		return 0, nil // timeout
-	}
-}
+// 	timer := time.NewTimer(PR.TimeOut)
+// 	defer timer.Stop()
 
-// type CNCBuffer
+// 	for {
+// 		select {
+// 		case <-timer.C:
+// 			return PR.buffer
+// 		default:
+// 			n, err := PR.reader.Read(readBuf)
+// 			if err != nil {
+// 				return PR.buffer
+// 			}
+
+// 			if n > 0 {
+// 				PR.buffer = append(PR.buffer, readBuf[:n]...)
+
+// 				if !timer.Stop() {
+// 					<-timer.C // clear chan
+// 				}
+// 				timer.Reset(PR.TimeOut)
+// 			}
+// 		}
+// 	}
+// }
+
+// func (PR *TimeoutReader) Read() string {
+// 	readBuf := make([]byte, 1024)
+// 	PR.buffer = PR.buffer[:0]
+// 	for {
+// 		timer := time.NewTimer(PR.TimeOut)
+// 		n, err := PR.readWithTimeout(readBuf, timer)
+// 		timer.Stop()
+// 		if err != nil {
+// 			log.Println(err)
+// 			return string(PR.buffer)
+// 		}
+// 		if n > 0 {
+// 			PR.buffer = append(PR.buffer, readBuf[:n]...)
+// 			continue
+// 		}
+// 		return string(PR.buffer)
+// 	}
+// }
+
+// func (PR *TimeoutReader) readWithTimeout(buf []byte, timer *time.Timer) (int, error) {
+// 	done := make(chan struct {
+// 		n   int
+// 		err error
+// 	})
+
+// 	go func() {
+// 		n, err := PR.reader.Read(buf)
+// 		done <- struct {
+// 			n   int
+// 			err error
+// 		}{n, err}
+// 	}()
+
+// 	select {
+// 	case result := <-done:
+// 		return result.n, result.err
+// 	case <-timer.C:
+// 		return 0, nil // timeout
+// 	}
+// }
+
+// // type CNCBuffer

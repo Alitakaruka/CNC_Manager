@@ -92,15 +92,6 @@ func (P *FDMPrinterData) ExecuteTask(file []byte) {
 			return
 		default:
 			res := CNCService.DeleteComments_GCode(Data)
-			// res = FixGCodeLine(res)
-
-			// if strings.HasPrefix(res, "M104") || //TODO DEBUG!
-			// 	strings.HasPrefix(res, "M109") ||
-			// 	strings.HasPrefix(res, "M140") ||
-			// 	strings.HasPrefix(res, "M190") {
-			// 	continue // ← пропускаем нагрев
-			// }
-
 			if res == "" || res == CNCService.EndOfData {
 				continue
 			}
@@ -203,8 +194,10 @@ func (FDM *FDMPrinterData) ParseCommand(Prefix, dataStr string) {
 	switch Prefix {
 	case ExtruderTempPref:
 		strs := strings.Split(dataStr, "/")
-		FDM.Extruder1.CurTemp, _ = strconv.Atoi(strs[0])
-		FDM.Extruder1.NeedTemp, _ = strconv.Atoi(strs[1])
+		if len(strs) == 2 {
+			FDM.Extruder1.CurTemp, _ = strconv.Atoi(strs[0])
+			FDM.Extruder1.NeedTemp, _ = strconv.Atoi(strs[1])
+		}
 		// _, err := fmt.Sscanf(dataStr, BedTemp, &FDM.Extruder1.CurTemp, &FDM.Extruder1.NeedTemp)
 		// if err != nil {
 		// 	log.Println(err)
@@ -212,8 +205,14 @@ func (FDM *FDMPrinterData) ParseCommand(Prefix, dataStr string) {
 		// }
 	case BedTempPref:
 		strs := strings.Split(dataStr, "/")
-		FDM.Bed.CurTemp, _ = strconv.Atoi(strs[0])
-		FDM.Bed.NeedTemp, _ = strconv.Atoi(strs[1])
+
+		if len(strs) == 2 {
+			FDM.Bed.CurTemp, _ = strconv.Atoi(strs[0])
+			FDM.Bed.NeedTemp, _ = strconv.Atoi(strs[1])
+		} else {
+			fmt.Printf("Prefix: %v\n", Prefix)
+			fmt.Printf("dataStr: %v\n", dataStr)
+		}
 
 		// _, err := fmt.Sscanf(dataStr, BedTemp, &FDM.Bed.CurTemp, &FDM.Bed.NeedTemp)
 		// fmt.Printf("FDM.Bed.CurTemp: %v\n", FDM.Bed.CurTemp)

@@ -113,7 +113,7 @@ func (CNC_M *CNCManager) Connect(conData ConnectionData) error {
 	err := newCNC.InitDevice()
 
 	if err != nil {
-		newCNC.CloseConnection()
+		newCNC.CloseConnection(err.Error())
 		return err
 	}
 	dto := newCNC.GetDTO()
@@ -348,6 +348,8 @@ func (CNC_M *CNCManager) GetJson() string {
 			Progress:         machine.Progress,
 			TimeRemaining:    0,
 		}
+
+		// fmt.Printf("CNC.IsWorking: %v\n", CNC.IsWorking)
 
 		CNC.Position.X = dto.Position.X
 		CNC.Position.Y = dto.Position.Y
